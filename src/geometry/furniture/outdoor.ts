@@ -167,7 +167,8 @@ const bench: FurnitureBuilder = (m, s) => {
   for (const sx of [-1, 1]) {
     const x = sx * (hw - 60);
     m.bar([x, -hd + 60, 0], [x, -hd + 60, armZ], 40);
-    m.bar([x, hd - 110, 0], [x, hd - 40, h - 20], 40);
+    m.bar([x, hd - 110, 0], [x, hd - 110, seatZ], 40);
+    m.bar([x, hd - 110, seatZ], [x, hd - 40, h - 20], 40);
     m.bar([x, -hd + 40, seatZ - 40], [x, hd - 90, seatZ - 40], 40);
     m.bar([x, -hd + 30, armZ], [x, hd - 70, armZ + 20], 45, 30);
   }
@@ -182,7 +183,7 @@ const bench: FurnitureBuilder = (m, s) => {
   for (let j = 0; j < 3; j++) {
     const z0 = seatZ + 70 + j * ((h - seatZ - 100) / 3);
     const z1 = z0 + (h - seatZ - 100) / 3 - 25;
-    const yb = hd - 110 + (70 * (z0 + z1)) / 2 / h;
+    const yb = hd - 110 + (70 * ((z0 + z1) / 2 - seatZ)) / Math.max(1, h - 20 - seatZ);
     m.box(-hw + 20, yb - 45, z0, hw - 20, yb - 22, z1);
   }
 };

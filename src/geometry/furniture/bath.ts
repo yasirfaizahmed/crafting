@@ -49,7 +49,7 @@ const washbasin: FurnitureBuilder = (m, s) => {
   );
   m.use('steel', 'detail');
   m.cylinder(0, -20, h - depth + 20, h - depth + 22, 22, 12);
-  tap(m, 0, hd - 55, h, BASIN_TAP_RISE, 140);
+  tap(m, 0, hd - 70, h, BASIN_TAP_RISE, 140);
 };
 
 const vanity: FurnitureBuilder = (m, s) => {

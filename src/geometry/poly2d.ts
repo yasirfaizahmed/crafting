@@ -16,6 +16,9 @@ export interface PolygonWithHoles {
   holes: Vec2[][];
 }
 
+/** Points closer than this (model mm) are merged before triangulating. */
+const WELD_EPS = 1e-4;
+
 const near = (a: Vec2, b: Vec2, eps: number) => Math.abs(a.x - b.x) <= eps && Math.abs(a.y - b.y) <= eps;
 
 /** Drop consecutive duplicate points (and a duplicated closing point). */
@@ -31,9 +34,9 @@ export function dedupe(poly: Vec2[], eps = 1e-6): Vec2[] {
  * and are always wound counter-clockwise in 2D.
  */
 export function triangulate(outer: Vec2[], holes: Vec2[][] = []): { points: Vec2[]; tris: Tri[] } {
-  const o = dedupe(outer);
+  const o = dedupe(outer, WELD_EPS);
   if (o.length < 3 || Math.abs(signedArea(o)) < 1e-9) return { points: [], tris: [] };
-  const hs = holes.map((h) => dedupe(h)).filter((h) => h.length >= 3 && Math.abs(signedArea(h)) > 1e-9);
+  const hs = holes.map((h) => dedupe(h, WELD_EPS)).filter((h) => h.length >= 3 && Math.abs(signedArea(h)) > 1e-9);
   const points = [...o, ...hs.flat()];
   let faces: number[][];
   if (o.length === 3 && !hs.length) faces = [[0, 1, 2]];
@@ -65,9 +68,15 @@ export function triangulate(outer: Vec2[], holes: Vec2[][] = []): { points: Vec2
 function splitTJunctions(points: Vec2[], tris: Tri[]): Tri[] {
   const out: Tri[] = [];
   const queue = tris.slice();
-  let guard = 0;
-  while (queue.length && guard++ < 100000) {
+  // Each split strictly shrinks a triangle, so this bound is never reached on sane input; if it is,
+  // keep the remaining triangles unsplit rather than dropping them.
+  let budget = 64 * tris.length + 1024;
+  while (queue.length) {
     const t = queue.pop()!;
+    if (budget-- <= 0) {
+      out.push(t);
+      continue;
+    }
     let split = false;
     for (let e = 0; e < 3 && !split; e++) {
       const ia = t[e];
@@ -78,15 +87,16 @@ function splitTJunctions(points: Vec2[], tris: Tri[]): Tri[] {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const l2 = dx * dx + dy * dy;
-      if (l2 < 1e-18) continue;
+      if (l2 < 4 * WELD_EPS * WELD_EPS) continue;
+      const len = Math.sqrt(l2);
       for (let k = 0; k < points.length; k++) {
         if (k === ia || k === ib || k === ic) continue;
         const p = points[k];
-        const s = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
-        if (s <= 1e-9 || s >= 1 - 1e-9) continue;
-        // Distance from the edge line ≤ 1e-7 of the edge length.
-        const cr = (p.x - a.x) * dy - (p.y - a.y) * dx;
-        if (Math.abs(cr) > 1e-7 * l2) continue;
+        // Strictly between a and b (by more than the weld tolerance) and on the edge line.
+        const along = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len;
+        if (along <= WELD_EPS || along >= len - WELD_EPS) continue;
+        const off = Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
+        if (off > Math.min(WELD_EPS, 1e-7 * len)) continue;
         // Same winding as (a, b, c): (a, p, c) and (p, b, c).
         queue.push([ia, k, ic], [k, ib, ic]);
         split = true;
@@ -232,7 +242,7 @@ export function roundedRect(x0: number, y0: number, x1: number, y1: number, r: n
       out.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
     }
   }
-  return dedupe(out);
+  return dedupe(out, WELD_EPS * 10);
 }
 
 // -----------------------------------------------------------------------------

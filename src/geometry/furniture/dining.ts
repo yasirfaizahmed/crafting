@@ -97,7 +97,12 @@ const barStool: FurnitureBuilder = (m, s) => {
     const rr = rb + ((rt - rb) * z) / zt;
     return [Math.cos(a) * rr, Math.sin(a) * rr, z];
   };
-  for (let k = 0; k < 4; k++) m.tube(leg(k, 0), leg(k, zt), 12, 8);
+  // Splayed legs on small floor glides (the tilted tube ends stay above the floor).
+  for (let k = 0; k < 4; k++) {
+    const [gx, gy] = leg(k, 0);
+    m.cylinder(gx, gy, 0, 6, 14, 8);
+    m.tube(leg(k, 6), leg(k, zt), 12, 8);
+  }
   const zr = Math.min(300, top * 0.4);
   for (let k = 0; k < 4; k++) m.tube(leg(k, zr), leg((k + 1) % 4, zr), 9, 6);
 };
