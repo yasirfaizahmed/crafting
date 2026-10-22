@@ -1,4 +1,7 @@
 /**
+ * Furniture convention: local +y is the BACK, so rotation 0 puts the back against a wall to the
+ * north, 180 → south wall, −90 → east wall, 90 → west wall.
+ *
  * Demo project: a two-storey house with every element type. Used as the first-run project,
  * in unit tests across modules, and by the E2E smoke test.
  */
@@ -104,14 +107,14 @@ export function createSampleProject(): Project {
     }),
     createElement('stair', ground.id, { position: { x: 1200, y: 3200 }, rotation: 90, width: 1000, shape: 'straight', materialId: 'wood-oak' }),
     createElement('column', ground.id, { position: { x: 12900, y: -900 }, width: 250, depth: 250, height: 2800 }),
-    createElement('furniture', ground.id, { catalogId: 'sofa-3', position: { x: 8000, y: 1000 }, rotation: 0 }),
+    createElement('furniture', ground.id, { catalogId: 'sofa-3', position: { x: 8000, y: 1000 }, rotation: 180 }),
     createElement('furniture', ground.id, { catalogId: 'coffee-table', position: { x: 8000, y: 2200 }, rotation: 0 }),
-    createElement('furniture', ground.id, { catalogId: 'tv-unit', position: { x: 8000, y: 4150 }, rotation: 180 }),
+    createElement('furniture', ground.id, { catalogId: 'tv-unit', position: { x: 8000, y: 4150 }, rotation: 0 }),
     createElement('furniture', ground.id, { catalogId: 'dining-table-6', position: { x: 10600, y: 2300 }, rotation: 90 }),
-    createElement('furniture', ground.id, { catalogId: 'kitchen-base-1200', position: { x: 6300, y: 7575 }, rotation: 180 }),
-    createElement('furniture', ground.id, { catalogId: 'stove', position: { x: 7300, y: 7575 }, rotation: 180 }),
-    createElement('furniture', ground.id, { catalogId: 'fridge', position: { x: 8350, y: 7525 }, rotation: 180 }),
-    createElement('furniture', ground.id, { catalogId: 'desk', position: { x: 3500, y: 7300 }, rotation: 180 }),
+    createElement('furniture', ground.id, { catalogId: 'kitchen-base-1200', position: { x: 6300, y: 7575 }, rotation: 0 }),
+    createElement('furniture', ground.id, { catalogId: 'stove', position: { x: 7300, y: 7575 }, rotation: 0 }),
+    createElement('furniture', ground.id, { catalogId: 'fridge', position: { x: 8350, y: 7525 }, rotation: 0 }),
+    createElement('furniture', ground.id, { catalogId: 'desk', position: { x: 3500, y: 7300 }, rotation: 0 }),
     createElement('furniture', ground.id, { catalogId: 'ceiling-light', position: { x: 8500, y: 2200 }, rotation: 0, elevation: 2800 }),
     createElement('furniture', ground.id, { catalogId: 'tree', position: { x: -4000, y: 3000 }, rotation: 0 }),
     createElement('furniture', ground.id, { catalogId: 'car', position: { x: 15000, y: 3000 }, rotation: 0 }),
@@ -153,11 +156,11 @@ export function createSampleProject(): Project {
     createElement('window', first.id, { hostId: fNorth.id, offset: 3000, width: 2400, height: 2000, sill: 300, style: 'fixed' }),
     createElement('window', first.id, { hostId: fWest.id, offset: 2000, width: 900, height: 1200 }),
     createElement('door', first.id, { hostId: fInterior[0].id, offset: 2000, width: 900 }),
-    createElement('furniture', first.id, { catalogId: 'bed-king', position: { x: 9000, y: 6800 }, rotation: 180 }),
-    createElement('furniture', first.id, { catalogId: 'nightstand', position: { x: 7700, y: 7500 }, rotation: 180 }),
-    createElement('furniture', first.id, { catalogId: 'wardrobe', position: { x: 11300, y: 3000 }, rotation: 90 }),
-    createElement('furniture', first.id, { catalogId: 'bathtub', position: { x: 4800, y: 7350 }, rotation: 180 }),
-    createElement('furniture', first.id, { catalogId: 'toilet', position: { x: 3600, y: 7400 }, rotation: 180 }),
+    createElement('furniture', first.id, { catalogId: 'bed-king', position: { x: 9000, y: 6800 }, rotation: 0 }),
+    createElement('furniture', first.id, { catalogId: 'nightstand', position: { x: 7700, y: 7500 }, rotation: 0 }),
+    createElement('furniture', first.id, { catalogId: 'wardrobe', position: { x: 11300, y: 3000 }, rotation: -90 }),
+    createElement('furniture', first.id, { catalogId: 'bathtub', position: { x: 4800, y: 7350 }, rotation: 0 }),
+    createElement('furniture', first.id, { catalogId: 'toilet', position: { x: 3600, y: 7400 }, rotation: 0 }),
     createElement('room', first.id, {
       name: 'Master Bedroom',
       number: '101',
