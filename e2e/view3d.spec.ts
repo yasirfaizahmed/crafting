@@ -280,12 +280,20 @@ test('visual tour: x-ray, cut-away, fly mode and image capture', async ({ page }
   await page.evaluate(() => (window as any).crafting.ui.set({ cutAboveActive: false, sunAzimuth: 220, sunAltitude: 25 }));
   await page.waitForTimeout(500);
   await shot(page, 'view3d-evening');
-  // Fly mode: crosshair + resume overlay (pointer lock is not granted headless without a gesture).
+  // Fly mode at eye height inside the house: crosshair targeting + hover card.
   await page.evaluate(() => (window as any).crafting.ui.set({ cameraMode: 'fly', sunAzimuth: 135, sunAltitude: 45 }));
   await page.waitForTimeout(300);
   expect((await stats(page)).mode).toBe('fly');
+  await page.evaluate(() => (document.querySelector('.v3d-container') as any).__view3d.lookFrom(7000, 600, 1620, 7000, 4500, 1000));
+  await waitIdle(page);
   await shot(page, 'view3d-fly');
+  // Releasing the pointer lock (Esc) shows the resume overlay.
+  await page.evaluate(() => document.exitPointerLock());
+  await page.waitForTimeout(300);
+  await expect(page.locator('.v3d-overlay')).toBeVisible();
+  await shot(page, 'view3d-fly-paused');
   await page.evaluate(() => (window as any).crafting.ui.set({ cameraMode: 'orbit' }));
+  await expect(page.locator('.v3d-overlay')).toBeHidden();
   // Close-up of the entrance and an interior view at eye height.
   await page.evaluate(() => (document.querySelector('.v3d-container') as any).__view3d.lookFrom(9000, -7000, 2200, 4500, 0, 1600));
   await waitIdle(page);

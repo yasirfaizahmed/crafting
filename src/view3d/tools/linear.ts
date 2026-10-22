@@ -4,7 +4,7 @@
  * chain. Points snap to wall ends (magnet), wall lines, 15° angles and the grid.
  */
 import { createFromCatalog } from '../../core/defaults';
-import { angleDeg, distance, midpoint, sub } from '../../core/math2d';
+import { angleDeg, closestOnSegment, distance, midpoint, sub } from '../../core/math2d';
 import type { Element, Project, Railing, Vec2 } from '../../core/types';
 import { formatLength } from '../../core/units';
 import { JOIN_TOLERANCE } from '../../core/walls';
@@ -215,7 +215,13 @@ export class LinearTool implements Tool {
         if (this.kind === 'beam' && el.type === 'column') extra.push(el.position);
       }
     }
-    const snap = snapPlanPoint(hit.point, {
+    // Aiming at a wall face starts/ends on that wall's location line (clean T junction).
+    let raw = hit.point;
+    const hitEl = hit.elementId ? project.elements[hit.elementId] : undefined;
+    if (hitEl?.type === 'wall' && Math.abs(hit.normal.z) < 0.5 && hitEl.levelId === levelId) {
+      raw = closestOnSegment(hit.point, hitEl.start, hitEl.end).point;
+    }
+    const snap = snapPlanPoint(raw, {
       grid: project.settings.gridSize,
       snapGrid: ui.snapGrid,
       snapAngle: ui.snapAngle,

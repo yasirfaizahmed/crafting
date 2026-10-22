@@ -167,7 +167,9 @@ export class MaterialLibrary {
       m.emissive.set(def.emissive);
       m.emissiveIntensity = 1.6;
     }
+    // Metals are mostly reflection: give them a stronger share of the sky environment.
     if (def.category === 'glass') m.envMapIntensity = 1.6;
+    else if (def.metalness >= 0.5) m.envMapIntensity = 2.4;
     m.name = def.id;
     m.userData.materialId = def.id;
     this.base.set(def.id, m);

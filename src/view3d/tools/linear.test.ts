@@ -116,6 +116,23 @@ describe('wall tool: two-click with chaining', () => {
     ctx.store.undo();
     ctx.store.undo();
     expect(ctx.store.project.levels).toHaveLength(2);
+    // Continuing the same chain re-creates the storey.
+    tool.use(floorHit(ctx.store.project, { x: 2000, y: 4000 }));
+    expect(ctx.store.project.levels).toHaveLength(3);
+    expect(ctx.store.project.levels[2].id).toBe(top.id);
+  });
+
+  it('aiming at a wall face starts on its location line (T junction)', () => {
+    const ctx = sampleContext();
+    const p = ctx.store.project;
+    const south = ofType(ctx, 'wall').find((w) => w.levelId === p.levels[0].id && w.start.y === 0 && w.end.y === 0)!;
+    const { env } = fakeEnv(ctx, 'wall-concrete');
+    const tool = new LinearTool(env, 'wall');
+    tool.use(elementHit(south, { x: 3480, y: -125 }, 1200, { x: 0, y: -1, z: 0 }));
+    tool.use(floorHit(p, { x: 3500, y: -4000 }));
+    const w = ofType(ctx, 'wall').find((x) => x.end.y === -4000)!;
+    expect(w.start).toEqual({ x: 3500, y: 0 });
+    expect(w.levelId).toBe(p.levels[0].id);
   });
 
   it('pointing at the top of a ground-floor wall targets the storey above', () => {

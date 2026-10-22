@@ -90,9 +90,12 @@ export function targetLevelId(t: BuildTarget): string {
   return t.levelId ?? t.create!.id;
 }
 
-/** After a commit created the level, later placements in the same gesture reuse it. */
+/**
+ * After a commit created the level, later placements in the same gesture reuse it. `create` is
+ * kept so the level can be re-created if the user undoes it mid-gesture.
+ */
 export function settledTarget(t: BuildTarget): BuildTarget {
-  return t.create ? { ...t, levelId: t.create.id, create: undefined } : t;
+  return t.create ? { ...t, levelId: t.create.id } : t;
 }
 
 /**

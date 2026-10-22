@@ -52,7 +52,7 @@ describe('level targeting', () => {
     expect(t.levelId).toBeUndefined();
     expect(t.create).toMatchObject({ elevation: 6000, name: 'Second Floor' });
     expect(targetLevelId(t)).toBe(t.create!.id);
-    expect(settledTarget(t)).toMatchObject({ levelId: t.create!.id, create: undefined });
+    expect(settledTarget(t)).toMatchObject({ levelId: t.create!.id });
   });
 
   it('commitPlacement adds the level and the element in one undo step', () => {

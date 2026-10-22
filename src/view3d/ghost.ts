@@ -66,9 +66,10 @@ export class GhostRenderer implements GhostSink {
     this.count = elements.length;
     if (elements.length) {
       const project = this.getProject();
+      const extra = (options.extraLevels ?? []).filter((l) => !project.levels.some((x) => x.id === l.id));
       const temp: Project = {
         ...project,
-        levels: options.extraLevels?.length ? [...project.levels, ...options.extraLevels] : project.levels,
+        levels: extra.length ? [...project.levels, ...extra] : project.levels,
         elements: { ...project.elements },
       };
       for (const el of elements) temp.elements[el.id] = el;

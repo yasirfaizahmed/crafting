@@ -55,6 +55,21 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+const ENV_FRAG = /* glsl */ `
+uniform vec3 sunDir;
+varying vec3 vDir;
+void main() {
+  vec3 d = normalize(vDir);
+  float h = d.y;
+  vec3 zenith = vec3(0.55, 0.68, 0.9);
+  vec3 horizon = vec3(1.0);
+  vec3 ground = vec3(0.36, 0.37, 0.32);
+  vec3 col = h >= 0.0 ? mix(horizon, zenith, pow(clamp(h, 0.0, 1.0), 0.6)) : mix(horizon * 0.75, ground, pow(clamp(-h * 3.0, 0.0, 1.0), 0.5));
+  float s = max(dot(d, sunDir), 0.0);
+  col += vec3(1.0, 0.95, 0.85) * pow(s, 24.0) * 3.0;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
 const GRID_VERT = /* glsl */ `
 varying vec3 vWorld;
 void main() {
@@ -286,20 +301,24 @@ export class Environment {
   updateEnvironmentMap(renderer: THREE.WebGLRenderer): void {
     try {
       if (!this.pmrem) this.pmrem = new THREE.PMREMGenerator(renderer);
+      // A soft, slightly neutralised version of the sky so metals and glass read well.
       const envScene = new THREE.Scene();
-      const sky = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), this.sky.material);
-      envScene.add(sky);
-      const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#59683f' }));
-      ground.position.y = -1.6;
-      envScene.add(ground);
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { sunDir: { value: this.sunDir.clone() } },
+        vertexShader: SKY_VERT,
+        fragmentShader: ENV_FRAG,
+        side: THREE.BackSide,
+        depthWrite: false,
+      });
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), mat);
+      envScene.add(sphere);
       const prev = this.envTarget;
-      this.envTarget = this.pmrem.fromScene(envScene, 0.02, 0.1, 100);
+      this.envTarget = this.pmrem.fromScene(envScene, 0.03, 0.1, 100);
       this.scene.environment = this.envTarget.texture;
-      this.scene.environmentIntensity = 0.55;
+      this.scene.environmentIntensity = 0.5;
       prev?.dispose();
-      sky.geometry.dispose();
-      ground.geometry.dispose();
-      (ground.material as THREE.Material).dispose();
+      sphere.geometry.dispose();
+      mat.dispose();
     } catch (err) {
       console.warn('view3d: environment map failed', err);
     }

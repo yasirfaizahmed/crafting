@@ -788,6 +788,7 @@ export class Viewport {
         lights: this.fixtures.count,
         materials: this.materials.size,
         hover: this.hoverId,
+        environment: !!this.scene.environment,
         calls: this.renderer.info.render.calls,
         triangles: this.renderer.info.render.triangles,
       }),
