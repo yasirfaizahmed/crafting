@@ -9,3 +9,6 @@ playwright-report/
 
 # Local agent tooling (temporary git worktrees)
 .claude/worktrees/
+
+# Validation tooling downloads (not part of the project)
+*.whl
