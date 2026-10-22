@@ -18,6 +18,8 @@ export interface DrawingLayer {
   lineweight: number;
   linetype: Linetype;
   description: string;
+  /** AutoCAD Colour Index for DXF output (default: nearest ACI to `color`). */
+  aci?: number;
 }
 
 interface EntityBase {
@@ -29,6 +31,8 @@ interface EntityBase {
   linetype?: Linetype;
   /** Source element id (for selection / hyperlinks / DXF handles). */
   elementId?: string;
+  /** Semantic role within the element, e.g. 'tread', 'swing', 'leaf' (CSS class in SVG). */
+  tag?: string;
 }
 
 export interface LineEntity extends EntityBase {
@@ -56,6 +60,8 @@ export interface FillEntity extends EntityBase {
   stroke?: boolean;
   /** 0..1 fill opacity for screen/PDF. */
   opacity?: number;
+  /** Rotation of the hatch pattern, degrees CCW (e.g. along a wall for insulation/timber). */
+  hatchAngle?: number;
 }
 
 export interface ArcEntity extends EntityBase {
@@ -96,6 +102,8 @@ export interface DimensionEntity extends EntityBase {
   offset: number;
   /** Override text; default is the measured length formatted in the drawing units. */
   text?: string;
+  /** Explicit text centre (model mm) when the text does not fit between the extension lines. */
+  textPosition?: Vec2;
 }
 
 export type DrawingEntity = LineEntity | PolylineEntity | FillEntity | ArcEntity | CircleEntity | TextEntity | DimensionEntity;

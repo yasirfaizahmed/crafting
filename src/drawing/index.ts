@@ -2,45 +2,22 @@
  * 2D documentation drawings generated from the BIM model.
  *
  *   generatePlanDrawing(project, levelId, options) → Drawing (model-space mm)
+ *   generateElevationDrawing(project, side) / generateSectionDrawing(project, cut) → Drawing
+ *   doorSchedule / windowSchedule / roomSchedule / wallQuantities → ScheduleTable
+ *   hatchLines(outline, holes, pattern, spacing, angle) → clipped hatch segments
  *
- * NOTE: phase-0 baseline (wall outlines only). The drawing module owner implements the full
- * architectural plan (cut walls with hatches, door swings, window symbols, stairs with
- * break line + arrow, furniture symbols, room tags with areas, dimension chains, grid, north arrow).
+ * Every Drawing uses AIA / ISO 13567 layers with ISO 128 lineweights and ISO 3098 text heights,
+ * and is consumed by the SVG, DXF, PDF and PNG exporters (src/export).
  */
-import { boundsOf, emptyBounds } from '../core/math2d';
-import type { Project } from '../core/types';
-import { computeWallFootprints } from '../core/walls';
-import type { Drawing, DrawingLayer } from './types';
+import { PLAN_LAYERS } from './layers';
+import type { DrawingLayer } from './types';
 
 export * from './types';
+export { generatePlanDrawing, planTitle, DEFAULT_CUT_HEIGHT, type PlanDrawingOptions } from './plan';
+export { hatchLines, hatchFamilies, HATCHES, defaultHatchSpacing } from './hatch';
+export { PLAN_LAYERS, ELEVATION_LAYERS, SHEET_LAYERS, ALL_LAYERS, PEN, TEXT, LINETYPE_PATTERNS, layerByName } from './layers';
+export { explodeDimension, formatDimension } from './dimension';
+export { DrawingBuilder, drawingBounds } from './builder';
 
-export interface PlanDrawingOptions {
-  /** Scale denominator, default 100. */
-  scale?: number;
-  includeFurniture?: boolean;
-  includeDimensions?: boolean;
-  includeRoomTags?: boolean;
-  /** Draw the level below as a faded underlay (for the on-screen editor). */
-  includeLevelBelow?: boolean;
-}
-
-export const STANDARD_LAYERS: DrawingLayer[] = [
-  { name: 'A-WALL', color: '#000000', lineweight: 0.5, linetype: 'continuous', description: 'Walls (cut)' },
-];
-
-export function generatePlanDrawing(project: Project, levelId: string, options: PlanDrawingOptions = {}): Drawing {
-  const level = project.levels.find((l) => l.id === levelId);
-  const entities: Drawing['entities'] = [];
-  for (const fp of computeWallFootprints(project, levelId).values()) {
-    entities.push({ kind: 'polyline', layer: 'A-WALL', points: fp.polygon, closed: true, elementId: fp.wallId });
-  }
-  const pts = entities.flatMap((e) => (e.kind === 'polyline' ? e.points : []));
-  return {
-    title: `${level?.name ?? 'Level'} — Floor Plan`,
-    scale: options.scale ?? 100,
-    units: project.settings.units,
-    layers: STANDARD_LAYERS,
-    entities,
-    bounds: pts.length ? boundsOf(pts) : emptyBounds(),
-  };
-}
+/** Standard plan layers (painter's order). */
+export const STANDARD_LAYERS: DrawingLayer[] = PLAN_LAYERS;
