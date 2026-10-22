@@ -4,7 +4,7 @@ import { ensureCCW, rotate, signedArea } from '../core/math2d';
 import type { Vec2 } from '../core/types';
 import type { MeshData } from './types';
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 const subV = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const crossV = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -32,6 +32,10 @@ export class MeshBuilder {
     return this.pos.length / 3;
   }
 
+  get triangleCount(): number {
+    return this.idx.length / 3;
+  }
+
   get isEmpty(): boolean {
     return this.idx.length === 0;
   }
@@ -49,11 +53,36 @@ export class MeshBuilder {
     const projected = uvs ?? projectUV(pts, n);
     const base = this.vertexCount;
     for (let i = 0; i < pts.length; i++) {
-      this.pos.push(...pts[i]);
-      this.nor.push(...n);
-      this.uv.push(...projected[i]);
+      const p = pts[i];
+      this.pos.push(p[0], p[1], p[2]);
+      this.nor.push(n[0], n[1], n[2]);
+      this.uv.push(projected[i][0], projected[i][1]);
     }
     for (let i = 1; i < pts.length - 1; i++) this.idx.push(base, base + i, base + i + 1);
+  }
+
+  /**
+   * Planar face given as shared vertices + triangles (each wound CCW seen from the front).
+   * One flat normal for the whole face (area-weighted), UVs projected unless given.
+   */
+  addIndexedFace(pts: V3[], tris: ArrayLike<number>[], uvs?: [number, number][]): void {
+    if (pts.length < 3 || !tris.length) return;
+    let n: V3 = [0, 0, 0];
+    for (const t of tris) {
+      const c = crossV(subV(pts[t[1]], pts[t[0]]), subV(pts[t[2]], pts[t[0]]));
+      n = [n[0] + c[0], n[1] + c[1], n[2] + c[2]];
+    }
+    if (Math.hypot(n[0], n[1], n[2]) < 1e-12) return;
+    n = normV(n);
+    const projected = uvs ?? projectUV(pts, n);
+    const base = this.vertexCount;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      this.pos.push(p[0], p[1], p[2]);
+      this.nor.push(n[0], n[1], n[2]);
+      this.uv.push(projected[i][0], projected[i][1]);
+    }
+    for (const t of tris) this.idx.push(base + t[0], base + t[1], base + t[2]);
   }
 
   addTriangle(a: V3, b: V3, c: V3): void {
@@ -70,12 +99,14 @@ export class MeshBuilder {
    * `up` = true faces +Y (seen from above), false faces −Y.
    */
   addPlanFace(outline: Vec2[], holes: Vec2[][], elevMm: number, up: boolean): void {
+    if (outline.length < 3) return;
     const outer = ensureCCW(outline);
-    const hs = holes.map((h) => (signedArea(h) > 0 ? [...h].reverse() : h));
+    const hs = holes.filter((h) => h.length >= 3).map((h) => (signedArea(h) > 0 ? [...h].reverse() : h));
     const tris = ShapeUtils.triangulateShape(
       outer.map((p) => new Vector2(p.x, p.y)),
       hs.map((h) => h.map((p) => new Vector2(p.x, p.y))),
     );
+    if (!tris.length) return;
     const all = [...outer, ...hs.flat()];
     const base = this.vertexCount;
     const ny = up ? 1 : -1;
@@ -97,22 +128,11 @@ export class MeshBuilder {
   /** Vertical side walls for a closed plan ring between two elevations (outward facing for CCW rings). */
   addPlanRingSides(ring: Vec2[], z0: number, z1: number, outward = true): void {
     const r = outward ? ensureCCW(ring) : [...ensureCCW(ring)].reverse();
-    let u = 0;
     for (let i = 0; i < r.length; i++) {
       const a = r[i];
       const b = r[(i + 1) % r.length];
-      const len = Math.hypot(b.x - a.x, b.y - a.y) * MM_TO_M;
       // CCW in plan: outward normal is to the right of a→b. Order a0,b0,b1,a1 faces outward.
-      this.addPolygon(
-        [w(a, z0), w(b, z0), w(b, z1), w(a, z1)],
-        [
-          [u, z0 * MM_TO_M],
-          [u + len, z0 * MM_TO_M],
-          [u + len, z1 * MM_TO_M],
-          [u, z1 * MM_TO_M],
-        ],
-      );
-      u += len;
+      this.addPolygon([w(a, z0), w(b, z0), w(b, z1), w(a, z1)]);
     }
   }
 
@@ -122,7 +142,7 @@ export class MeshBuilder {
     this.addPlanFace(outline, holes, z1, true);
     this.addPlanFace(outline, holes, z0, false);
     this.addPlanRingSides(outline, z0, z1, true);
-    for (const h of holes) this.addPlanRingSides(h, z0, z1, false);
+    for (const h of holes) if (h.length >= 3) this.addPlanRingSides(h, z0, z1, false);
   }
 
   /** Box centred on plan point `c` (mm), size w×d (plan) × h (vertical), base at z0, rotated deg in plan. */
@@ -144,10 +164,10 @@ export class MeshBuilder {
   /** Append another mesh (already in world space). */
   append(m: MeshData): void {
     const base = this.vertexCount;
-    this.pos.push(...m.positions);
-    this.nor.push(...m.normals);
-    this.uv.push(...m.uvs);
-    for (const i of m.indices) this.idx.push(base + i);
+    for (let i = 0; i < m.positions.length; i++) this.pos.push(m.positions[i]);
+    for (let i = 0; i < m.normals.length; i++) this.nor.push(m.normals[i]);
+    for (let i = 0; i < m.uvs.length; i++) this.uv.push(m.uvs[i]);
+    for (let i = 0; i < m.indices.length; i++) this.idx.push(base + m.indices[i]);
   }
 
   build(): MeshData {
@@ -160,15 +180,17 @@ export class MeshBuilder {
   }
 }
 
-/** Planar projection UV for a face with normal n: world metres along two in-plane axes. */
+/**
+ * Planar projection UV for a face with normal n, in world metres:
+ *  - horizontal faces: plan x / plan y (so floors line up across elements);
+ *  - other faces: u along the horizontal tangent (up × n, i.e. left→right seen from the front),
+ *    v along the in-plane up-slope direction (height on vertical faces, slope length on roofs).
+ */
 function projectUV(pts: V3[], n: V3): [number, number][] {
-  const ax = Math.abs(n[0]);
-  const ay = Math.abs(n[1]);
-  const az = Math.abs(n[2]);
-  if (ay >= ax && ay >= az) return pts.map((p) => [p[0], -p[2]]);
-  // Vertical-ish face: u along the horizontal tangent, v = height.
-  const t = normV([-n[2], 0, n[0]]);
-  return pts.map((p) => [p[0] * t[0] + p[2] * t[2], p[1]]);
+  if (Math.abs(n[1]) > 0.9999) return pts.map((p) => [p[0], -p[2]]);
+  const t = normV([n[2], 0, -n[0]]);
+  const b = crossV(n, t);
+  return pts.map((p) => [p[0] * t[0] + p[2] * t[2], p[0] * b[0] + p[1] * b[1] + p[2] * b[2]]);
 }
 
 export function emptyMesh(): MeshData {

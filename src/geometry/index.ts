@@ -5,32 +5,30 @@
  *   const geo  = buildElementGeometry(gctx, element);   // ElementGeometry (world metres, Y up)
  *
  * Every element type returns parts tagged with a materialId and role. Annotation-only types
- * (dimension, label, room) return no parts.
+ * (dimension, label, room) return no parts. Meshes are flat-shaded, wound counter-clockwise seen
+ * from outside, with UVs in metres; builders are deterministic and pure (they run in Node too).
  *
- * NOTE: This is the phase-0 baseline (simple prisms). The geometry module owner replaces the
- * per-type builders with full implementations (openings cut into walls, pitched roofs, detailed
- * stairs, parametric furniture…) WITHOUT changing these exported signatures.
+ * One file per element family: walls.ts, openings.ts (doors/windows), slabs.ts, roofs.ts,
+ * stairs.ts, structure.ts (columns/beams), railings.ts, blocks.ts, furniture/*.ts. They share the
+ * modelling DSL in model.ts and the 2D helpers in poly2d.ts.
  */
-import { getFurniture } from '../core/catalog';
-import { MM_TO_M } from '../core/coords';
-import { add, angleDeg, distance, midpoint, rotate, scale, sub } from '../core/math2d';
-import { DEFAULT_MATERIAL_FOR, materialFor } from '../core/materials';
 import type { Element, Project } from '../core/types';
-import {
-  computeWallFootprints,
-  getLevel,
-  pointAtOffset,
-  wallBaseElevation,
-  wallCenterOffset,
-  wallDirection,
-  wallHeight,
-  type WallFootprint,
-} from '../core/walls';
-import { MeshBuilder } from './mesh';
+import { computeWallFootprints, type WallFootprint } from '../core/walls';
+import { buildBlock } from './blocks';
+import { buildFurniture } from './furniture';
+import { buildDoor, buildWindow } from './openings';
+import { buildRailing } from './railings';
+import { buildRoof } from './roofs';
+import { buildSlab } from './slabs';
+import { buildStair } from './stairs';
+import { buildBeam, buildColumn } from './structure';
 import type { ElementGeometry, GeometryContext, GeometryPart } from './types';
+import { buildWall } from './walls';
 
 export * from './types';
 export { MeshBuilder, meshBounds, emptyMesh } from './mesh';
+export { roofPlanes, type RoofLine, type RoofLineKind, type RoofPlane, type RoofPlanes } from './roofs';
+export { FURNITURE_HEIGHT_ALLOWANCE, FURNITURE_MODELS } from './furniture';
 
 export function createGeometryContext(project: Project): GeometryContext {
   const cache = new Map<string, Map<string, WallFootprint>>();
@@ -47,125 +45,70 @@ export function createGeometryContext(project: Project): GeometryContext {
   };
 }
 
-const levelElev = (ctx: GeometryContext, levelId: string) => getLevel(ctx.project, levelId)?.elevation ?? 0;
-const levelHeight = (ctx: GeometryContext, levelId: string) => getLevel(ctx.project, levelId)?.height ?? 3000;
-
-function part(mb: MeshBuilder, materialId: string, role: GeometryPart['role'] = 'body', name?: string): GeometryPart[] {
-  return mb.isEmpty ? [] : [{ mesh: mb.build(), materialId, role, name }];
+/** Drop parts that are empty or carry non-finite data (defensive: a bad element must not break a scene). */
+function sanitize(parts: GeometryPart[]): GeometryPart[] {
+  return parts.filter((p) => {
+    const m = p.mesh;
+    if (!m.indices.length) return false;
+    for (let i = 0; i < m.positions.length; i++) if (!Number.isFinite(m.positions[i])) return false;
+    for (let i = 0; i < m.uvs.length; i++) if (!Number.isFinite(m.uvs[i])) return false;
+    return true;
+  });
 }
 
 export function buildElementGeometry(ctx: GeometryContext, el: Element): ElementGeometry {
   const out: ElementGeometry = { elementId: el.id, parts: [], lights: [] };
   if (el.hidden) return out;
-  const mat = materialFor(el).id;
-  const z0 = levelElev(ctx, el.levelId);
-  switch (el.type) {
-    case 'wall': {
-      const fp = ctx.footprints(el.levelId).get(el.id);
-      if (!fp) break;
-      const mb = new MeshBuilder();
-      const base = wallBaseElevation(ctx.project, el);
-      mb.addExtrusion(fp.polygon, base, base + wallHeight(ctx.project, el));
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'door':
-    case 'window': {
-      const host = ctx.project.elements[el.hostId];
-      if (!host || host.type !== 'wall') break;
-      const c = pointAtOffset(host, el.offset, wallCenterOffset(host));
-      const deg = angleDeg(wallDirection(host));
-      const base = wallBaseElevation(ctx.project, host) + el.sill;
-      const mb = new MeshBuilder();
-      mb.addPlanBox(c, el.width, el.type === 'window' ? 40 : 50, base, el.height, deg);
-      out.parts = part(mb, el.type === 'window' ? 'glass-clear' : mat, el.type === 'window' ? 'glass' : 'panel');
-      break;
-    }
-    case 'slab': {
-      if (el.outline.length < 3) break;
-      const mb = new MeshBuilder();
-      const top = z0 + el.topOffset;
-      mb.addExtrusion(el.outline, top - el.thickness, top, el.holes ?? []);
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'roof': {
-      if (el.outline.length < 3) break;
-      const mb = new MeshBuilder();
-      const eave = z0 + (el.baseOffset ?? levelHeight(ctx, el.levelId));
-      mb.addExtrusion(el.outline, eave, eave + el.thickness);
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'stair': {
-      const rise = el.rise ?? levelHeight(ctx, el.levelId);
-      const n = Math.max(1, Math.ceil(rise / el.maxRiser));
-      const riser = rise / n;
-      const dir = { x: Math.cos((el.rotation * Math.PI) / 180), y: Math.sin((el.rotation * Math.PI) / 180) };
-      const mb = new MeshBuilder();
-      for (let i = 0; i < n; i++) {
-        const c = add(el.position, scale(dir, el.tread * (i + 0.5)));
-        mb.addPlanBox(c, el.tread, el.width, z0, riser * (i + 1), el.rotation);
+  try {
+    switch (el.type) {
+      case 'wall':
+        out.parts = buildWall(ctx, el);
+        break;
+      case 'door':
+        out.parts = buildDoor(ctx, el);
+        break;
+      case 'window':
+        out.parts = buildWindow(ctx, el);
+        break;
+      case 'slab':
+        out.parts = buildSlab(ctx, el);
+        break;
+      case 'roof':
+        out.parts = buildRoof(ctx, el);
+        break;
+      case 'stair':
+        out.parts = buildStair(ctx, el);
+        break;
+      case 'column':
+        out.parts = buildColumn(ctx, el);
+        break;
+      case 'beam':
+        out.parts = buildBeam(ctx, el);
+        break;
+      case 'furniture': {
+        const f = buildFurniture(ctx, el);
+        out.parts = f.parts;
+        out.lights = f.lights.filter((l) => l.position.every(Number.isFinite));
+        break;
       }
-      out.parts = part(mb, mat);
-      break;
+      case 'block':
+        out.parts = buildBlock(ctx, el);
+        break;
+      case 'railing':
+        out.parts = buildRailing(ctx, el);
+        break;
+      case 'room':
+      case 'dimension':
+      case 'label':
+        break;
     }
-    case 'column': {
-      const mb = new MeshBuilder();
-      const h = el.height ?? levelHeight(ctx, el.levelId);
-      mb.addPlanBox(el.position, el.width, el.depth, z0 + el.baseOffset, h, el.rotation);
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'beam': {
-      const len = distance(el.start, el.end);
-      if (len < 1) break;
-      const top = z0 + (el.topOffset ?? levelHeight(ctx, el.levelId));
-      const mb = new MeshBuilder();
-      mb.addPlanBox(midpoint(el.start, el.end), len, el.width, top - el.depth, el.depth, angleDeg(sub(el.end, el.start)));
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'furniture': {
-      const def = getFurniture(el.catalogId);
-      const wdt = el.width ?? def?.width ?? 1000;
-      const dep = el.depth ?? def?.depth ?? 1000;
-      const hgt = el.height ?? def?.height ?? 1000;
-      const mb = new MeshBuilder();
-      mb.addPlanBox(el.position, wdt, dep, z0 + el.elevation, hgt, el.rotation);
-      out.parts = part(mb, el.materialId ?? def?.materialId ?? DEFAULT_MATERIAL_FOR.furniture);
-      if (def?.light) {
-        out.lights.push({
-          position: [el.position.x * MM_TO_M, (z0 + el.elevation + hgt * 0.5) * MM_TO_M, -el.position.y * MM_TO_M],
-          ...def.light,
-        });
-      }
-      break;
-    }
-    case 'block': {
-      const mb = new MeshBuilder();
-      const c = add({ x: el.position.x, y: el.position.y }, rotate({ x: el.size.x / 2, y: el.size.y / 2 }, el.rotation));
-      mb.addPlanBox(c, el.size.x, el.size.y, z0 + el.position.z, el.size.z, el.rotation);
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'railing': {
-      const mb = new MeshBuilder();
-      for (let i = 0; i + 1 < el.path.length; i++) {
-        const a = el.path[i];
-        const b = el.path[i + 1];
-        const len = distance(a, b);
-        if (len < 1) continue;
-        mb.addPlanBox(midpoint(a, b), len, 50, z0 + el.baseOffset + el.height - 50, 50, angleDeg(sub(b, a)));
-      }
-      out.parts = part(mb, mat);
-      break;
-    }
-    case 'room':
-    case 'dimension':
-    case 'label':
-      break;
+  } catch (err) {
+    // Malformed element data: render nothing for it rather than breaking the whole scene.
+    if (typeof console !== 'undefined') console.warn(`[geometry] failed to build ${el.type} ${el.id}`, err);
+    out.parts = [];
+    out.lights = [];
   }
+  out.parts = sanitize(out.parts);
   return out;
 }
 

@@ -24,6 +24,24 @@ export interface StairLayout {
   walkline: Vec2[];
   /** Polygons covering the whole stair footprint (flights + landings). */
   footprint: Vec2[][];
+  /** Straight runs of treads (straight / L / U stairs; empty for spirals), bottom to top. */
+  flights?: StairFlight[];
+}
+
+/** One straight run of treads, rising from a floor or landing to the next landing or floor. */
+export interface StairFlight {
+  /** Centre of the bottom edge of the flight's first tread (plan, mm). */
+  start: Vec2;
+  /** Unit plan direction of travel going up. */
+  direction: Vec2;
+  width: number;
+  /** Tread going (mm). */
+  going: number;
+  riserHeight: number;
+  /** Top of the floor or landing the flight starts from, relative to the level elevation (mm). */
+  base: number;
+  /** Indices into `treads`, bottom to top. The flight ends with one more riser up to the next landing/floor. */
+  treadIndices: number[];
 }
 
 export const SPIRAL_DEGREES_PER_TREAD = 27;
@@ -68,14 +86,25 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     const rw = (inner + outer) / 2;
     walkline = arcPts(rw, stair.rotation, stair.rotation + sign * T * step, Math.max(2, T * 2));
     footprint.push(ccw(arcPts(outer, 0, 360, 48).slice(0, 48)));
-    return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint };
+    return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights: [] };
   }
+
+  const flight = (start: Vec2, direction: Vec2, base: number, treadIndices: number[]): StairFlight => ({
+    start,
+    direction,
+    width: w,
+    going: g,
+    riserHeight: rh,
+    base,
+    treadIndices,
+  });
 
   if (stair.shape === 'straight' || T < 3) {
     for (let i = 0; i < T; i++) treads.push({ polygon: ccw(rect(i * g, (i + 1) * g, -w / 2, w / 2)), top: (i + 1) * rh });
     footprint.push(ccw(rect(0, Math.max(g, T * g), -w / 2, w / 2)));
     walkline = [P(0, 0), P(T * g, 0)];
-    return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint };
+    const flights = [flight(P(0, 0), f, 0, range(0, T))];
+    return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
   }
 
   // Two flights with a landing that counts as one tread level.
@@ -86,6 +115,7 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
   for (let i = 0; i < t1; i++) treads.push({ polygon: ccw(rect(i * g, (i + 1) * g, -w / 2, w / 2)), top: (i + 1) * rh });
   const run1 = t1 * g;
   footprint.push(ccw(rect(0, Math.max(run1, 1), -w / 2, w / 2)));
+  const flights = [flight(P(0, 0), f, 0, range(0, t1))];
 
   if (stair.shape === 'l-shape') {
     const landing = ccw(rect(run1, run1 + w, -w / 2, w / 2));
@@ -101,6 +131,7 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     const end = lat0 + side * t2 * g;
     footprint.push(ccw(rect(run1, run1 + w, Math.min(lat0, end), Math.max(lat0, end))));
     walkline = [P(0, 0), P(run1 + w / 2, 0), P(run1 + w / 2, end)];
+    flights.push(flight(P(run1 + w / 2, lat0), scale(s, side), landTop, range(t1, T)));
   } else {
     // U-shape: flight 2 returns alongside flight 1.
     const off = side * (w + U_STAIR_GAP);
@@ -116,8 +147,13 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     }
     footprint.push(ccw(rect(run1 - t2 * g, Math.max(run1, run1 - t2 * g + 1), off - w / 2, off + w / 2)));
     walkline = [P(0, 0), P(run1 + w / 2, 0), P(run1 + w / 2, off), P(run1 - t2 * g, off)];
+    flights.push(flight(P(run1, off), scale(f, -1), landTop, range(t1, T)));
   }
-  return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint };
+  return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
+}
+
+function range(a: number, b: number): number[] {
+  return Array.from({ length: Math.max(0, b - a) }, (_, i) => a + i);
 }
 
 function area(poly: Vec2[]): number {
