@@ -47,11 +47,13 @@ const wallLight: FurnitureBuilder = (m, s) => {
   m.use(s.primary, 'body');
   m.box(-Math.min(45, hw), hd - 15, h * 0.2, Math.min(45, hw), hd, h * 0.6);
   m.bar([0, hd - 15, h * 0.4], [0, -8, h * 0.4], 22);
-  const rTop = Math.min(hw - 2, (hd + hd - 15) / 2 - 2);
-  const cy = -hd + rTop + 2;
-  m.cylinder(0, cy, h * 0.3, h * 0.42, rTop * 0.55, 16, rTop * 0.75);
+  // Oval uplighter shade: as wide as the fixture, as deep as the room in front of the back plate.
+  const ry = Math.min(hw - 2, (hd + hd - 15) / 2 - 2);
+  const rx = Math.max(ry, hw - 2);
+  const cy = -hd + ry + 2;
+  m.cylinder(0, cy, h * 0.3, h * 0.42, rx * 0.55, 16, rx * 0.75, ry * 0.55);
   m.use(s.secondary, 'light', 'shade');
-  m.cylinder(0, cy, h * 0.42, h, rTop * 0.75, 20, rTop);
+  m.cylinder(0, cy, h * 0.42, h, rx * 0.75, 20, rx, ry * 0.75);
   return { light: [0, -hd - 80, h * 0.6] };
 };
 

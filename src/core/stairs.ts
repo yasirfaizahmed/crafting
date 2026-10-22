@@ -131,7 +131,7 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     const end = lat0 + side * t2 * g;
     footprint.push(ccw(rect(run1, run1 + w, Math.min(lat0, end), Math.max(lat0, end))));
     walkline = [P(0, 0), P(run1 + w / 2, 0), P(run1 + w / 2, end)];
-    flights.push(flight(P(run1 + w / 2, lat0), scale(s, side), landTop, range(t1, T)));
+    flights.push(flight(P(run1 + w / 2, lat0), scale(s, side), landTop, range(t1, t1 + t2)));
   } else {
     // U-shape: flight 2 returns alongside flight 1.
     const off = side * (w + U_STAIR_GAP);
@@ -147,7 +147,7 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     }
     footprint.push(ccw(rect(run1 - t2 * g, Math.max(run1, run1 - t2 * g + 1), off - w / 2, off + w / 2)));
     walkline = [P(0, 0), P(run1 + w / 2, 0), P(run1 + w / 2, off), P(run1 - t2 * g, off)];
-    flights.push(flight(P(run1, off), scale(f, -1), landTop, range(t1, T)));
+    flights.push(flight(P(run1, off), scale(f, -1), landTop, range(t1, t1 + t2)));
   }
   return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
 }

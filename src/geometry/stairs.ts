@@ -28,6 +28,8 @@ function railSides(stair: Stair): RailSides {
 }
 
 const RAIL_HEIGHT = 900;
+/** Thickness of monolithic landing slabs (mm). */
+const LANDING_SLAB = 200;
 
 export function buildStair(ctx: GeometryContext, stair: Stair): GeometryPart[] {
   if (!(stair.width > 0) || !(stair.tread > 0)) return [];
@@ -69,13 +71,16 @@ export function buildStair(ctx: GeometryContext, stair: Stair): GeometryPart[] {
         m.boxC(q.x, q.y, z0, 80, 80, l.top - t);
       }
     } else {
-      m.prism(l.polygon, top - Math.min(200, l.top), top);
+      m.prism(l.polygon, top - Math.min(LANDING_SLAB, l.top), top);
     }
   }
   return m.parts();
 }
 
-/** Monolithic flight: sawtooth steps over a sloped soffit, extruded across the width. */
+/**
+ * Monolithic flight: sawtooth steps over a sloped soffit, extruded across the width. Flights that
+ * start on a landing let the soffit run down to the landing's underside.
+ */
 function solidFlight(m: Model, fl: StairFlight, n: number, mat: string): void {
   const g = fl.going;
   const r = fl.riserHeight;
@@ -83,12 +88,14 @@ function solidFlight(m: Model, fl: StairFlight, n: number, mat: string): void {
   const cosA = g / Math.hypot(g, r);
   const waist = Math.max(150, r * cosA + 40);
   const wv = waist / cosA;
+  const bottom = -Math.min(LANDING_SLAB, Math.max(0, fl.base));
   const soffit = (x: number) => r + (x * r) / g - wv;
-  const xb = ((wv - r) * g) / r;
+  const xb = ((bottom - r + wv) * g) / r;
   const run = n * g;
-  const profile: [number, number][] = [[0, 0]];
-  if (xb < run - 1) profile.push([Math.max(0, xb), 0], [run, soffit(run)]);
-  else profile.push([run, 0]);
+  const profile: [number, number][] = [];
+  if (xb <= 0) profile.push([0, soffit(0)], [run, soffit(run)]);
+  else if (xb < run - 1) profile.push([0, bottom], [xb, bottom], [run, soffit(run)]);
+  else profile.push([0, bottom], [run, bottom]);
   for (let i = n; i >= 1; i--) profile.push([i * g, i * r], [(i - 1) * g, i * r]);
   m.use(mat, 'body');
   m.prismY(profile, -W, W);

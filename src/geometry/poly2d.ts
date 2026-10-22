@@ -57,7 +57,22 @@ export function triangulate(outer: Vec2[], holes: Vec2[][] = []): { points: Vec2
     const cr = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
     tris.push(cr >= 0 ? [f[0], f[1], f[2]] : [f[0], f[2], f[1]]);
   }
-  return { points, tris: points.length > 4 ? splitTJunctions(points, tris) : tris };
+  return { points, tris: points.length > 4 ? dropDegenerate(points, splitTJunctions(points, tris)) : tris };
+}
+
+/**
+ * Earcut emits zero-area triangles across runs of collinear vertices (e.g. stair nosings). They
+ * cover nothing but make their edges non-manifold, so drop them once T-junctions are split.
+ */
+function dropDegenerate(points: Vec2[], tris: Tri[]): Tri[] {
+  return tris.filter(([ia, ib, ic]) => {
+    const a = points[ia];
+    const b = points[ib];
+    const c = points[ic];
+    const cr = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y));
+    const l2 = Math.max((b.x - a.x) ** 2 + (b.y - a.y) ** 2, (c.x - a.x) ** 2 + (c.y - a.y) ** 2, (c.x - b.x) ** 2 + (c.y - b.y) ** 2);
+    return cr > 1e-9 * l2;
+  });
 }
 
 /**
