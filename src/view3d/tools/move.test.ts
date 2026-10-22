@@ -121,7 +121,7 @@ describe('select tool', () => {
     expect((ctx.store.getElement(sofa.id) as Furniture).position).toEqual({ x: 8700, y: 1200 });
 
     expect(tool.key({ key: 'R', shiftKey: true, ctrlKey: false, altKey: false })).toBe(true);
-    expect((ctx.store.getElement(sofa.id) as Furniture).rotation).toBe(345);
+    expect((ctx.store.getElement(sofa.id) as Furniture).rotation).toBe((sofa.rotation - 15 + 360) % 360);
     expect(ctx.store.undoLabel).toBe('Rotate furniture');
   });
 
