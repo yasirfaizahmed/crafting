@@ -2,6 +2,7 @@
 .v3d-container {
   position: relative;
   overflow: hidden;
+  container-type: inline-size;
   outline: none;
   background: #b9d3ea;
   user-select: none;
@@ -271,9 +272,13 @@
   font: 14px/1.5 system-ui, sans-serif;
 }
 
-@media (max-width: 640px) {
+/* Small 3D panes (split view on narrow screens): keep only the essentials. */
+@container (max-width: 560px) {
   .v3d-keys,
-  .v3d-toolhint {
+  .v3d-info-details {
     display: none;
+  }
+  .v3d-topleft {
+    max-width: calc(100% - 84px);
   }
 }
