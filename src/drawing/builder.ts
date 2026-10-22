@@ -68,6 +68,11 @@ export class DrawingBuilder {
     return this.add({ kind: 'dimension', layer, a, b, offset, ...extra });
   }
 
+  /** Entities on the named layers only (in the given order). */
+  only(names: string[]): DrawingEntity[] {
+    return names.flatMap((n) => this.buckets.get(n) ?? []);
+  }
+
   /** Entities of one layer so far. */
   entitiesOn(layer: string): DrawingEntity[] {
     return this.buckets.get(layer) ?? [];

@@ -6,7 +6,7 @@
  * the cut (roof overhang, beams, high windows, wall cabinets) are hidden/dashed.
  */
 import { detectOuterBoundaries } from '../core/rooms';
-import { emptyBounds, extendBounds, isEmptyBounds } from '../core/math2d';
+import { isEmptyBounds } from '../core/math2d';
 import type { Column, Element, Level, Project } from '../core/types';
 import { computeWallFootprints, wallLength } from '../core/walls';
 import { DrawingBuilder, drawingBounds } from './builder';
@@ -101,12 +101,9 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
   drawWalls(ctx);
   drawOpenings(ctx);
 
-  // Building extent (for grid, chains, north arrow): everything drawn so far except furniture.
-  const buildingExtent = drawingBounds(
-    b.entities(PLAN_LAYERS.filter((l) => l.name !== 'I-FURN' && l.name !== 'A-ANNO-REFR')),
-    scale,
-    b.units,
-  );
+  // Building extent (for the grid): architecture drawn so far, without furniture / underlay.
+  const archLayers = PLAN_LAYERS.map((l) => l.name).filter((n) => n !== 'I-FURN' && n !== 'A-ANNO-REFR');
+  const buildingExtent = drawingBounds(b.only(archLayers), scale, b.units);
   const hasExtent = !isEmptyBounds(buildingExtent);
   if (hasExtent && (options.includeGrid ?? columns.length >= 2) && columns.length) drawGrid(ctx, columns, buildingExtent);
 
@@ -114,11 +111,8 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
   for (const el of elements) if (el.type === 'label') drawLabel(ctx, el);
   if (options.includeDimensions !== false) {
     for (const el of elements) if (el.type === 'dimension') drawDimensionElement(ctx, el);
-    if ((options.autoDimensions ?? true) && hasExtent) {
-      const gridExtent = drawingBounds(b.entitiesOn('S-GRID'), scale, b.units);
-      const ext = isEmptyBounds(gridExtent) ? buildingExtent : union(buildingExtent, gridExtent);
-      drawExteriorChains(ctx, ext);
-    }
+    // Chains go outside the building, its grid and the user's own annotation.
+    if ((options.autoDimensions ?? true) && hasExtent) drawExteriorChains(ctx, drawingBounds(b.only(archLayers), scale, b.units));
   }
 
   const all = drawingBounds(b.entities(PLAN_LAYERS), scale, b.units);
@@ -127,15 +121,6 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
     if (options.includeTitle !== false) drawViewTitle(ctx, planTitle(level), { x: all.minX, y: all.minY - mm(ctx, 12) }, true);
   }
   return b.build(`${level.name || 'Level'} — Floor Plan`, PLAN_LAYERS);
-}
-
-function union(a: ReturnType<typeof emptyBounds>, c: ReturnType<typeof emptyBounds>) {
-  const out = emptyBounds();
-  extendBounds(out, { x: a.minX, y: a.minY });
-  extendBounds(out, { x: a.maxX, y: a.maxY });
-  extendBounds(out, { x: c.minX, y: c.minY });
-  extendBounds(out, { x: c.maxX, y: c.maxY });
-  return out;
 }
 
 function levelBelow(project: Project, level: Level): Level | undefined {
