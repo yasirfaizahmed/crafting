@@ -113,7 +113,7 @@ const materialField = (key = 'materialId', label = 'Material', optional = false,
 
 const rotationField = (label = 'Rotation'): FieldDef => ({ key: 'rotation', label, kind: 'angle', section: 'Placement', step: 15, wrap: true });
 
-function typed<T extends ElementType>(type: T, title: string, fields: FieldDef<ElementOfType<T>>[]): ElementSchema {
+function typed<T extends ElementType>(type: T, title: string, fields: FieldDef<ElementOfType<NoInfer<T>>>[]): ElementSchema {
   return { type, title, fields: fields as unknown as FieldDef[] };
 }
 

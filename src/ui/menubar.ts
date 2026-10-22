@@ -107,12 +107,28 @@ export function mountMenubar(container: HTMLElement, shell: Shell): () => void {
       t.classList.remove('is-open');
     });
     document.removeEventListener('pointerdown', onOutside, true);
+    document.removeEventListener('keydown', onDocKey, true);
     if (refocus) titles.find((t) => t.dataset.group === g)?.focus();
   };
 
   const onOutside = (e: PointerEvent) => {
     if (menuEl?.contains(e.target as Node) || bar.contains(e.target as Node)) return;
     close();
+  };
+
+  // A menu opened with the mouse has no focus inside it yet: Esc / arrows still apply.
+  const onDocKey = (e: KeyboardEvent) => {
+    if (!menuEl || menuEl.contains(document.activeElement)) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      const items = [...menuEl.querySelectorAll<HTMLElement>('.cr-menu-item')];
+      (e.key === 'ArrowDown' ? items[0] : items[items.length - 1])?.focus();
+    }
   };
 
   const open = (group: string, focusFirst: boolean) => {
@@ -193,6 +209,7 @@ export function mountMenubar(container: HTMLElement, shell: Shell): () => void {
     container.appendChild(menu);
     menuEl = menu;
     document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('keydown', onDocKey, true);
     if (focusFirst) items[0]?.focus();
   };
 

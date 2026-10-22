@@ -44,7 +44,7 @@ export function registerGlobalCommands(shell: Shell): () => void {
   const { ctx } = shell;
   const { store, ui, selection, commands } = ctx;
   const hasSelection = () => selection.get().length > 0;
-  const toggle = (key: 'snapGrid' | 'snapObjects' | 'snapAngle' | 'xray' | 'cutAboveActive' | 'shadows' | 'showGrid' | 'showLevelBelow') => () =>
+  const toggle = (key: 'snapGrid' | 'snapObjects' | 'snapAngle' | 'shadows' | 'showGrid' | 'showLevelBelow') => () =>
     ui.set({ [key]: !ui.get()[key] } as Partial<ReturnType<typeof ui.get>>);
   const setLevel = (dir: 1 | -1) => () => {
     const id = adjacentLevelId(store.project, ui.get().activeLevelId, dir);
@@ -95,9 +95,7 @@ export function registerGlobalCommands(shell: Shell): () => void {
     { id: 'view.camera.fly', label: 'Fly Camera', group: 'View', run: () => ui.set({ cameraMode: 'fly' }) },
     { id: 'view.camera.orbit', label: 'Orbit Camera', group: 'View', run: () => ui.set({ cameraMode: 'orbit' }) },
     { id: 'view.frameAll', label: 'Zoom to Fit', group: 'View', run: () => ctx.events.emit('zoom-to', { ids: [] }) },
-    { id: 'view.frameSelection', label: 'Zoom to Selection', group: 'View', enabled: hasSelection, run: () => ctx.events.emit('zoom-to', { ids: [...selection.get()] }) },
-    { id: 'view.xray', label: 'X-ray Walls', group: 'View', run: toggle('xray') },
-    { id: 'view.cutaway', label: 'Cut Away Upper Levels', group: 'View', run: toggle('cutAboveActive') },
+    { id: 'view.zoomSelection', label: 'Zoom to Selection', group: 'View', enabled: hasSelection, run: () => ctx.events.emit('zoom-to', { ids: [...selection.get()] }) },
     { id: 'view.shadows', label: 'Sun Shadows', group: 'View', run: toggle('shadows') },
     { id: 'view.showGrid', label: 'Show Grid', group: 'View', run: toggle('showGrid') },
     { id: 'view.levelBelow', label: 'Show Level Below', group: 'View', run: toggle('showLevelBelow') },
@@ -110,7 +108,7 @@ export function registerGlobalCommands(shell: Shell): () => void {
     { id: 'inventory.toggle', label: 'Creative Inventory', group: 'Build', keys: ['e'], run: () => ui.set({ inventoryOpen: !ui.get().inventoryOpen }) },
     {
       id: 'level.add',
-      label: 'Add Level Above',
+      label: 'Add Empty Level Above',
       group: 'Build',
       run: () => {
         const l = insertLevel(store, ui.get().activeLevelId, 'above');
@@ -120,7 +118,7 @@ export function registerGlobalCommands(shell: Shell): () => void {
     },
     {
       id: 'level.addBelow',
-      label: 'Add Level Below',
+      label: 'Add Empty Level Below',
       group: 'Build',
       run: () => {
         const l = insertLevel(store, ui.get().activeLevelId, 'below');
@@ -165,11 +163,17 @@ export const MENU_LAYOUT: Record<string, string[]> = {
     '-',
     'view.camera.fly',
     'view.camera.orbit',
+    'view.toggleCamera',
+    'view.resetCamera',
+    'view.topView',
+    '-',
     'view.frameAll',
+    'view.zoomSelection',
     'view.frameSelection',
+    'plan.zoomToFit',
     '-',
     'view.xray',
-    'view.cutaway',
+    'view.cutAway',
     'view.shadows',
     'view.showGrid',
     'view.levelBelow',
@@ -181,7 +185,20 @@ export const MENU_LAYOUT: Record<string, string[]> = {
     'view.leftPanel',
     'view.rightPanel',
   ],
-  Build: ['inventory.toggle', '-', ...QUICK_HOLD.map((id) => `build.hold.${id}`), '-', 'level.add', 'level.addBelow'],
+  Build: [
+    'inventory.toggle',
+    '-',
+    'build.generate3d',
+    'build.addFloorAbove',
+    'level.add',
+    'level.addBelow',
+    '-',
+    'plan.calibrateUnderlay',
+    'plan.toggleUnderlay',
+    'plan.removeUnderlay',
+    '-',
+    ...QUICK_HOLD.map((id) => `build.hold.${id}`),
+  ],
   Export: EXPORTERS.map((e) => `export.${e.format}`),
   Help: ['help', 'palette', '-', 'help.welcome', 'help.about'],
 };
@@ -189,7 +206,10 @@ export const MENU_LAYOUT: Record<string, string[]> = {
 export const MENU_ORDER = ['File', 'Edit', 'View', 'Build', 'Export', 'Help'];
 
 /** Commands never listed in menus (still in the palette unless also in PALETTE_HIDDEN). */
-export const MENU_HIDDEN = new Set(Array.from({ length: HOTBAR_SIZE }, (_, i) => `hotbar.${i + 1}`));
+export const MENU_HIDDEN = new Set([...Array.from({ length: HOTBAR_SIZE }, (_, i) => `hotbar.${i + 1}`), 'plan.importUnderlay']);
+
+/** Commands left out of the command palette (duplicates of friendlier entries). */
+export const PALETTE_HIDDEN = new Set(['plan.importUnderlay', 'edit.deselect']);
 
 /** Check-mark state for toggle commands. */
 export function commandChecked(shell: Shell, id: string): boolean | undefined {
@@ -213,7 +233,7 @@ export function commandChecked(shell: Shell, id: string): boolean | undefined {
       return u.cameraMode === 'orbit';
     case 'view.xray':
       return u.xray;
-    case 'view.cutaway':
+    case 'view.cutAway':
       return u.cutAboveActive;
     case 'view.shadows':
       return u.shadows;

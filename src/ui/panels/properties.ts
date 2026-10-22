@@ -368,8 +368,8 @@ export function mountProperties(container: HTMLElement, shell: Shell): Propertie
     const settings = [
       settingField({ key: 'units', label: 'Units', kind: 'select', section: 'Options', options: [{ value: 'metric', label: 'Metric (mm, m)' }, { value: 'imperial', label: 'Imperial (ft, in)' }] }),
       settingField({ key: 'gridSize', label: 'Grid size', kind: 'length', section: 'Options', min: 1, step: 50 }),
-      settingField({ key: 'wallThickness', label: 'Default wall', kind: 'length', section: 'Options', min: 10, step: 10 }),
-      settingField({ key: 'levelHeight', label: 'Default level height', kind: 'length', section: 'Options', min: 500, step: 100 }),
+      settingField({ key: 'wallThickness', label: 'Wall thickness', kind: 'length', section: 'Options', min: 10, step: 10 }),
+      settingField({ key: 'levelHeight', label: 'Level height', kind: 'length', section: 'Options', min: 500, step: 100 }),
       settingField({ key: 'northAngle', label: 'True north', kind: 'angle', section: 'Options', step: 5, wrap: true, hint: 'Angle of geographic north from plan +Y (IFC TrueNorth)' }),
     ];
     controls.push(...info, ...settings);
