@@ -49,7 +49,7 @@ export class CameraController {
   private walk: WalkState | null = null;
   private readonly keys = new Set<string>();
   private tween: Tween | null = null;
-  private lastSpace = 0;
+  private lastSpace = -Infinity;
   private jumpQueued = false;
   // Scratch objects (no per-frame allocations).
   private readonly v1 = new THREE.Vector3();
@@ -128,7 +128,7 @@ export class CameraController {
       // Event timestamps keep double-taps reliable even when frames are slow.
       const now = time;
       if (now - this.lastSpace < DOUBLE_TAP_MS) {
-        this.lastSpace = 0;
+        this.lastSpace = -Infinity;
         this.toggleFlying();
       } else {
         this.lastSpace = now;
@@ -155,6 +155,18 @@ export class CameraController {
       return false;
     }
     return this.keys.size > 0 || this.vel.lengthSq() > 1e-6 || (!!this.walk && !this.walk.onGround);
+  }
+
+  /**
+   * Move the orbit pivot to the depth of world point `p` along the current view ray, so the
+   * next orbit/pan turns around what the user pointed at without the view jumping.
+   */
+  pivotAt(p: THREE.Vector3): void {
+    if (this.mode !== 'orbit' || this.tween) return;
+    const fwd = this.camera.getWorldDirection(this.v1);
+    const depth = this.v2.subVectors(p, this.camera.position).dot(fwd);
+    if (depth < 0.5) return;
+    this.orbit.target.copy(this.camera.position).addScaledVector(fwd, depth);
   }
 
   /** Mouse look in fly mode (pixel deltas). */

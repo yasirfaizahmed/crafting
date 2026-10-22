@@ -517,6 +517,11 @@ export class Viewport {
     }
     if (!this.locked) this.updatePointer(e);
     this.clicks.down(e.button, e.clientX, e.clientY);
+    if (this.cam.mode === 'orbit' && e.button !== 0) {
+      // Orbit / pan around whatever is under the cursor.
+      const hit = this.pick();
+      if (hit) this.cam.pivotAt(this.tmp.set(...planToWorld(hit.point, hit.elevation)));
+    }
     if (e.button === 0 && this.tool.beginDrag) {
       const hit = this.pick();
       this.drag = { pending: hit, shift: e.shiftKey, active: false, elevation: hit?.elevation ?? 0 };
