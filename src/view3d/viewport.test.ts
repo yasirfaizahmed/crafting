@@ -152,7 +152,7 @@ describe('viewport input pipeline (jsdom, stand-in renderer)', () => {
   it('MMB picks the pointed element into the hotbar', () => {
     const rig = mount();
     hold(rig.ctx, 'tool-select');
-    click(rig, at(rig, 3000, -125, 1500), 1);
+    click(rig, at(rig, 3500, -125, 1500), 1);
     const ui = rig.ctx.ui.get();
     expect(ui.hotbar[ui.hotbarIndex]).toBe('wall-brick');
   });
@@ -207,7 +207,7 @@ describe('viewport input pipeline (jsdom, stand-in renderer)', () => {
     rig.ctx.events.on('hover', (e) => {
       if (e.source === '3d') seen.push(e.id);
     });
-    const p = at(rig, 3000, -125, 1500);
+    const p = at(rig, 3500, -125, 1500);
     rig.r.domElement.dispatchEvent(new MouseEvent('mousemove', { clientX: p.x, clientY: p.y, bubbles: true }));
     tick(rig.r);
     expect(seen.length).toBe(1);

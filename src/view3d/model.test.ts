@@ -122,9 +122,9 @@ describe('picking', () => {
   it('hits element meshes, then the floor plane, then the ground', () => {
     const { project, model } = setup();
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-    // Look straight at the south facade from 10 m away, 1.5 m high.
-    camera.position.set(3, 1.5, 10);
-    camera.lookAt(3, 1.5, 0);
+    // Look straight at the south facade from 10 m away, 1.5 m high (clear of the front door and its casing).
+    camera.position.set(3.5, 1.5, 10);
+    camera.lookAt(3.5, 1.5, 0);
     camera.updateMatrixWorld();
     const picker = new Picker();
     picker.aim(camera, 0, 0);
