@@ -38,7 +38,8 @@ Two ways to build, always in sync because both edit the same model:
 src/
   core/        Data model, store/undo, math, walls & joins, catalog, materials, units, serialization
                (shared — additive changes only; see "Rules")
-    rooms.ts       ← plan2d owner: room detection
+    rooms.ts       room detection (detectRooms / roomAtPoint)            — plan2d owner may improve
+    stairs.ts      stair layout (computeStairLayout: treads, landings)   — geometry owner may improve
     autobuild.ts   ← plan2d owner: "Generate 3D" (slabs/ceilings/rooms/roof from walls)
   app/         AppContext (state.ts), context factory, sample project
   geometry/    Element → triangle meshes (world space). Pure TS, runs in Node.        [geometry owner]
@@ -76,6 +77,11 @@ computeWallFootprints(project, levelId) → Map<wallId, WallFootprint>  // join-
 wallLength, wallDirection, wallNormal, wallFaceOffsets, pointAtOffset, projectOntoWall,
 wallHeight(project, w), wallBaseElevation, openingsOfWall, openingInterval, openingFits, openingOverlaps,
 wallDependents, wallsTouch
+
+// Rooms & stairs
+detectRooms(project, levelId) → DetectedRoom[] {polygon (clear, CCW), centerPolygon, area, wallIds}
+roomAtPoint(project, levelId, p) → DetectedRoom | undefined   // e.g. slab "flood fill" click
+computeStairLayout(stair, levelHeight) → {riserCount, riserHeight, treads[{polygon, top}], landings, walkline, footprint}
 
 // Catalog / materials
 CATALOG, getCatalogItem(id), catalogItemForElement(el), FURNITURE, getFurniture(id), DEFAULT_HOTBAR
@@ -127,7 +133,10 @@ Canvas 2D drafting of the **active level**; CAD conventions; see "Controls".
 ### export — `EXPORTERS` / `runExport(format, project, options, env)`
 Each format implements the stub function in its own file without changing the signature.
 
-### io — `loadInitialProject()`, open/save/autosave/recent, `importDXF`
+### io — see `src/io/index.ts` for the full API
+`loadInitialProject`, `startAutosave(ctx)`, `clearAutosave`, `openProjectFile`, `saveProjectFile`,
+`downloadBlob`, `pickTextFile`, `pickImageFile`, `listRecentProjects`, `openRecentProject`,
+`listDXFLayers`, `importDXF(text, options) → Element[]`.
 
 ### ui — `mountApp(root, ctx)`
 Owns layout, top menu, hotbar, creative inventory, level panel, properties panel, status bar,
