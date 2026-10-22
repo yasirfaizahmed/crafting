@@ -142,10 +142,9 @@ const island: FurnitureBuilder = (m, s) => {
   const hd = s.d / 2;
   const end = 40;
   const overhang = Math.min(330, s.d * 0.35);
-  baseCabinet(m, s.w, s.d, s.h, { carcass: s.primary, front: s.primary, x0: -hw + end, x1: hw - end, yBack: hd - overhang });
-  // Waterfall worktop.
+  // Worktop over the whole footprint (seating overhang at the back) with waterfall ends.
+  baseCabinet(m, s.w, s.d, s.h, { carcass: s.primary, front: s.primary, top: s.secondary, x0: -hw + end, x1: hw - end, yBack: hd - overhang });
   m.use(s.secondary, 'body', 'worktop');
-  m.box(-hw, -hd, s.h - TOP_T, hw, hd, s.h);
   m.box(-hw, -hd, 0, -hw + end, hd, s.h - TOP_T);
   m.box(hw - end, -hd, 0, hw, hd, s.h - TOP_T);
 };

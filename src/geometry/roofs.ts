@@ -263,10 +263,15 @@ export const ROOF_SOFFIT_MATERIAL = 'plaster-white';
 export const ROOF_FASCIA_MATERIAL = 'paint-white';
 const DEFAULT_INFILL = 'plaster-white';
 
+/** Roofing that needs a pitch (tiles, slates, shingles) is shown as a membrane on flat roofs unless chosen explicitly. */
+const PITCH_ONLY_ROOFING = new Set(['roof-tiles-clay', 'roof-shingles-grey', 'roof-slate']);
+export const FLAT_ROOF_DEFAULT_MATERIAL = 'roof-membrane';
+
 export function buildRoof(ctx: GeometryContext, roof: Roof): GeometryPart[] {
   const a = analyseRoof(ctx.project, roof);
   if (!a) return [];
-  const mat = materialFor(roof).id;
+  let mat = materialFor(roof).id;
+  if (a.kind === 'flat' && !roof.materialId && PITCH_ONLY_ROOFING.has(mat)) mat = FLAT_ROOF_DEFAULT_MATERIAL;
   return a.kind === 'flat' ? buildFlat(ctx, roof, a, mat) : buildPitched(ctx, a, mat);
 }
 
