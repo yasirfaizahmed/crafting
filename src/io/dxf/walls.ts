@@ -377,5 +377,14 @@ export function linesToWalls(input: LineSeg[], options: LinesToWallsOptions): Wa
 
   const walls = [...doubles, ...singles];
   if (singles.length && doubles.length) joinWallEnds(walls, opts.weld);
+  // Re-weld: projecting merged lines onto their mean direction can move shared corners by a few mm.
+  const welded = weldEndpoints(
+    walls.map((w) => ({ a: w.start, b: w.end })),
+    opts.weld,
+  );
+  welded.forEach((s, i) => {
+    walls[i].start = s.a;
+    walls[i].end = s.b;
+  });
   return walls.filter((w) => distance(w.start, w.end) >= Math.max(opts.minLength, 1));
 }
