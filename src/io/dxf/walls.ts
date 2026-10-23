@@ -282,17 +282,67 @@ const dirOf = (w: WallSpec): Vec2 => {
  * Join free wall ends: L corners move both ends to the centreline intersection; T ends extend
  * (or trim) to the host's centreline. Parallel walls are never joined (keeps door gaps open).
  */
+/** Uniform grid over item bounding boxes (padded) for neighbourhood queries. */
+class GridIndex<T> {
+  private cells = new Map<string, T[]>();
+
+  constructor(
+    items: T[],
+    bounds: (t: T) => { minX: number; minY: number; maxX: number; maxY: number },
+    pad: number,
+    private readonly size: number,
+  ) {
+    for (const it of items) {
+      const b = bounds(it);
+      const x0 = Math.floor((b.minX - pad) / size);
+      const x1 = Math.floor((b.maxX + pad) / size);
+      const y0 = Math.floor((b.minY - pad) / size);
+      const y1 = Math.floor((b.maxY + pad) / size);
+      // Degenerate huge items (bad data) fall back to a global bucket.
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) {
+        (this.cells.get('*') ?? this.cells.set('*', []).get('*')!).push(it);
+        continue;
+      }
+      for (let x = x0; x <= x1; x++)
+        for (let y = y0; y <= y1; y++) {
+          const k = `${x},${y}`;
+          const list = this.cells.get(k);
+          if (list) list.push(it);
+          else this.cells.set(k, [it]);
+        }
+    }
+  }
+
+  query(p: Vec2): T[] {
+    const local = this.cells.get(`${Math.floor(p.x / this.size)},${Math.floor(p.y / this.size)}`) ?? [];
+    const global = this.cells.get('*');
+    return global ? [...local, ...global] : local;
+  }
+}
+
+const segBounds = (w: { start: Vec2; end: Vec2 }) => ({
+  minX: Math.min(w.start.x, w.end.x),
+  minY: Math.min(w.start.y, w.end.y),
+  maxX: Math.max(w.start.x, w.end.x),
+  maxY: Math.max(w.start.y, w.end.y),
+});
+
 export function joinWallEnds(walls: WallSpec[], tol: number): void {
   const MIN_SIN = Math.sin((5 * Math.PI) / 180);
+  const maxReach = Math.max(0, ...walls.map((w) => w.thickness)) + tol;
+  // Ends move by at most one reach while joining, so pad the index by two.
+  const index = new GridIndex(walls, segBounds, 2 * maxReach + tol, Math.max(1000, 4 * maxReach));
   const connected = (p: Vec2, self: WallSpec) =>
-    walls.some((o) => o !== self && (distance(o.start, p) <= tol || distance(o.end, p) <= tol || closestOnSegment(p, o.start, o.end).distance <= tol));
+    index
+      .query(p)
+      .some((o) => o !== self && (distance(o.start, p) <= tol || distance(o.end, p) <= tol || closestOnSegment(p, o.start, o.end).distance <= tol));
   for (const A of walls) {
     for (const end of ['start', 'end'] as const) {
       const E = A[end];
       if (connected(E, A)) continue;
       const dA = dirOf(A);
       let best: { X: Vec2; B: WallSpec; dist: number } | null = null;
-      for (const B of walls) {
+      for (const B of index.query(E)) {
         if (B === A) continue;
         const dB = dirOf(B);
         if (Math.abs(cross(dA, dB)) < MIN_SIN) continue;
@@ -335,7 +385,8 @@ function asWall(w: WallSpec, i: number): Wall {
 }
 
 /** True if `p` is inside (or within `tol` of) any of the polygons. */
-function nearPolygons(p: Vec2, polys: Vec2[][], tol: number): boolean {
+function nearPolygons(p: Vec2, index: GridIndex<Vec2[]>, tol: number): boolean {
+  const polys = index.query(p);
   for (const poly of polys) {
     if (pointInPolygon(p, poly)) return true;
     for (let i = 0; i < poly.length; i++) if (closestOnSegment(p, poly[i], poly[(i + 1) % poly.length]).distance <= tol) return true;
@@ -363,6 +414,13 @@ export function linesToWalls(input: LineSeg[], options: LinesToWallsOptions): Wa
 
   // Leftover line parts that are not part of a double-line wall outline become single walls.
   const footprints = doubles.length ? [...computeFootprintsForWalls(doubles.map(asWall)).values()].map((f) => f.polygon) : [];
+  const polyBounds = (poly: Vec2[]) => ({
+    minX: Math.min(...poly.map((q) => q.x)),
+    minY: Math.min(...poly.map((q) => q.y)),
+    maxX: Math.max(...poly.map((q) => q.x)),
+    maxY: Math.max(...poly.map((q) => q.y)),
+  });
+  const footprintIndex = new GridIndex(footprints, polyBounds, opts.weld, 2000);
   const singles: WallSpec[] = [];
   for (const g of groups)
     for (const l of g.lines)
@@ -371,7 +429,7 @@ export function linesToWalls(input: LineSeg[], options: LinesToWallsOptions): Wa
         const a = at(l.d, s, l.o);
         const b = at(l.d, e, l.o);
         const mid = at(l.d, (s + e) / 2, l.o);
-        if (footprints.length && [a, b, mid].every((p) => nearPolygons(p, footprints, opts.weld))) continue;
+        if (footprints.length && [a, b, mid].every((p) => nearPolygons(p, footprintIndex, opts.weld))) continue;
         singles.push({ start: a, end: b, thickness: opts.wallThickness, doubleLine: false, layer: l.layer });
       }
 
