@@ -6,7 +6,7 @@
 import { catalogItemForElement, getFurniture } from '../../core/catalog';
 import { getMaterial, hasMaterial } from '../../core/materials';
 import type { Element, Project, UnitSystem } from '../../core/types';
-import { deleteSelection, duplicateSelection, holdCatalogItem } from '../actions';
+import { deleteSelection, duplicateSelection, flipSelectedStairs, holdCatalogItem } from '../actions';
 import { batched, domId, h } from '../dom';
 import { formatTime, pluralize } from '../format';
 import { icon, type IconName } from '../icons';
@@ -249,6 +249,12 @@ export function mountProperties(container: HTMLElement, shell: Shell): Propertie
         : null,
       lockBtn,
       hideBtn,
+      ...(elements.some((e) => e.type === 'stair')
+        ? [
+            headerButton('mirror', 'Mirror stair — flip left/right (M)', () => void flipSelectedStairs(shell, 'mirror')),
+            headerButton('flipDirection', 'Flip stair direction — up/down (Shift+M)', () => void flipSelectedStairs(shell, 'reverse')),
+          ]
+        : []),
       headerButton('copy', 'Duplicate (Ctrl+D)', () => duplicateSelection(shell)),
       headerButton('trash', 'Delete (Del)', () => deleteSelection(shell), 'is-danger'),
     );

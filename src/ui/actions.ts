@@ -4,7 +4,9 @@
 import { createSampleProject } from '../app/sample';
 import { getCatalogItem } from '../core/catalog';
 import { createProject } from '../core/defaults';
-import type { Project } from '../core/types';
+import { mirrorStair, reverseStair } from '../core/stairs';
+import type { Project, Stair } from '../core/types';
+import { getLevel } from '../core/walls';
 import { openProjectFile, saveProjectFile } from '../io';
 import { copyElements, duplicateElements, pasteOffset, preparePaste } from './clipboard';
 import { holdItem, setSlot } from './hotbar-model';
@@ -125,6 +127,36 @@ export function deleteSelection(shell: Shell): number {
   store.remove(removable, removable.length === 1 ? `Delete ${store.getElement(removable[0])!.type}` : `Delete ${removable.length} elements`);
   selection.clear();
   return removable.length;
+}
+
+/** Selected, unlocked stairs. */
+export function selectedStairs(shell: Shell): Stair[] {
+  const { store, selection } = shell.ctx;
+  return selection
+    .get()
+    .map((id) => store.getElement(id))
+    .filter((e): e is Stair => e?.type === 'stair' && !e.locked);
+}
+
+/**
+ * Flip the selected stairs in place: 'mirror' swaps left and right (the mirror image),
+ * 'reverse' swaps which end goes up. One undo step. Returns how many stairs changed.
+ */
+export function flipSelectedStairs(shell: Shell, mode: 'mirror' | 'reverse'): number {
+  const { store } = shell.ctx;
+  const stairs = selectedStairs(shell);
+  if (!stairs.length) {
+    shell.toast('Select a stair first', 'info');
+    return 0;
+  }
+  const label = `${mode === 'mirror' ? 'Mirror' : 'Flip direction of'} ${stairs.length === 1 ? 'stair' : `${stairs.length} stairs`}`;
+  store.transact(label, (tx) => {
+    for (const s of stairs) {
+      const height = getLevel(store.project, s.levelId)?.height ?? store.project.settings.levelHeight;
+      tx.replace(mode === 'mirror' ? mirrorStair(s, height) : reverseStair(s, height));
+    }
+  });
+  return stairs.length;
 }
 
 export function selectAllOnLevel(shell: Shell): void {

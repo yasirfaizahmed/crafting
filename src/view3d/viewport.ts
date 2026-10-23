@@ -624,7 +624,7 @@ export class Viewport {
     } else if (plain && !e.shiftKey && VIEW_KEYS[k]) {
       if (!e.repeat && !e.defaultPrevented) void this.ctx.commands.run(VIEW_KEYS[k]);
       consumed = true;
-    } else if (plain && k === 'r') {
+    } else if (plain && (k === 'r' || k === 'm')) {
       consumed = this.tool.key?.(e) ?? false;
     }
     if (!consumed && !e.metaKey && !e.altKey && (!e.ctrlKey || e.code.startsWith('Control'))) consumed = this.cam.keyDown(e.code, e.repeat, e.timeStamp);

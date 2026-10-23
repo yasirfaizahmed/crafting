@@ -4,7 +4,7 @@ import { createSampleProject } from '../../app/sample';
 import { createElement, createProject } from '../../core/defaults';
 import { polygonArea } from '../../core/math2d';
 import { detectRooms } from '../../core/rooms';
-import type { Block, Dimension, Door, Element, Furniture, Label, Railing, Room, Slab, Wall } from '../../core/types';
+import type { Block, Dimension, Door, Element, Furniture, Label, Railing, Room, Slab, Stair, Wall } from '../../core/types';
 import { wallLength } from '../../core/walls';
 import { type Harness, mount, rectWalls } from './harness';
 
@@ -374,6 +374,11 @@ describe('other tools', () => {
     h.hold('stair-straight');
     h.drag({ x: 0, y: 0 }, { x: 0, y: 2000 });
     expect(of(h, 'stair')).toHaveLength(1);
+    // M mirrors the stair in hand before it is placed.
+    h.hold('stair-l');
+    h.key('m');
+    h.drag({ x: 8000, y: 0 }, { x: 8000, y: 2000 });
+    expect(of<Stair>(h, 'stair').find((s) => s.shape === 'l-shape')?.turn).toBe('right');
     h.hold('column-rect');
     h.click(1010, 990);
     expect((of(h, 'column')[0] as Element & { position: { x: number } }).position.x).toBe(1000);

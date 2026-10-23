@@ -177,7 +177,12 @@ abstract class PlacementTool implements Tool {
     ghost.show([p.element], p.valid, { extraLevels: p.target.create ? [p.target.create] : undefined });
     ghost.marker(null);
     ghost.label(p.info ?? null, p.info && hit ? { point: hit.point, elevation: hit.elevation + 300 } : undefined);
-    this.env.hint(p.valid ? `RMB: place ${this.noun} · R rotate (Shift+R 15°) · LMB break` : (p.reason ?? 'Cannot place here'));
+    this.env.hint(p.valid ? `RMB: place ${this.noun} · R rotate (Shift+R 15°)${this.extraHint} · LMB break` : (p.reason ?? 'Cannot place here'));
+  }
+
+  /** Tool-specific key help appended to the hint. */
+  protected get extraHint(): string {
+    return '';
   }
 
   use(hit: PickHit | null): void {
@@ -254,6 +259,12 @@ export class FurnitureTool extends PlacementTool {
 
 export class StairTool extends PlacementTool {
   protected readonly undoLabel = 'Place stair';
+  /** Mirrored ghost (M): the turn opposite to the catalog item's. */
+  private mirrored = false;
+
+  protected override get extraHint(): string {
+    return ' · M mirror';
+  }
 
   protected plan(hit: PickHit): Placement | null {
     const project = this.env.ctx.store.project;
@@ -261,8 +272,16 @@ export class StairTool extends PlacementTool {
     const position = snapToGrid(hit.point, this.snapStep(100));
     const rotation = norm360(snapDeg(this.env.player().yaw, 90) + this.rot);
     const element = createFromCatalog(this.env.item, targetLevelId(target), { position, rotation });
-    if (!element) return null;
+    if (!element || element.type !== 'stair') return null;
+    if (this.mirrored) element.turn = element.turn === 'left' ? 'right' : 'left';
     return { element, target, valid: true };
+  }
+
+  override key(e: KeyInput): boolean {
+    if (e.key.toLowerCase() !== 'm' || e.shiftKey || e.ctrlKey || e.metaKey) return super.key(e);
+    this.mirrored = !this.mirrored;
+    this.hover(this.lastHit);
+    return true;
   }
 }
 

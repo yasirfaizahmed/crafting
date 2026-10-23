@@ -10,6 +10,7 @@ import {
   copySelection,
   deleteSelection,
   duplicateSelection,
+  flipSelectedStairs,
   holdCatalogItem,
   newProject,
   openProject,
@@ -17,6 +18,7 @@ import {
   pasteClipboard,
   saveProject,
   selectAllOnLevel,
+  selectedStairs,
   traceImage,
 } from './actions';
 import { HOTBAR_SIZE } from './hotbar-model';
@@ -74,6 +76,22 @@ export function registerGlobalCommands(shell: Shell): () => void {
     { id: 'edit.duplicate', label: 'Duplicate', group: 'Edit', keys: ['ctrl+d'], enabled: hasSelection, run: () => duplicateSelection(shell) },
     { id: 'edit.delete', label: 'Delete', group: 'Edit', keys: ['delete', 'backspace'], shortcut: 'Del', enabled: hasSelection, run: () => void deleteSelection(shell) },
     { id: 'edit.selectAll', label: 'Select All on Level', group: 'Edit', keys: ['ctrl+a'], run: () => selectAllOnLevel(shell) },
+    {
+      id: 'edit.mirrorStair',
+      label: 'Mirror Stair (Flip Left ↔ Right)',
+      group: 'Edit',
+      keys: ['m'],
+      enabled: () => selectedStairs(shell).length > 0,
+      run: () => void flipSelectedStairs(shell, 'mirror'),
+    },
+    {
+      id: 'edit.flipStairDirection',
+      label: 'Flip Stair Direction (Up ↔ Down)',
+      group: 'Edit',
+      keys: ['shift+m'],
+      enabled: () => selectedStairs(shell).length > 0,
+      run: () => void flipSelectedStairs(shell, 'reverse'),
+    },
     {
       id: 'edit.deselect',
       label: 'Deselect / Close',
@@ -154,7 +172,7 @@ export function setUnits(shell: Shell, units: 'metric' | 'imperial'): void {
 /** Menu structure for the shell's own commands ('-' = separator). Unlisted commands are appended. */
 export const MENU_LAYOUT: Record<string, string[]> = {
   File: ['file.new', 'file.open', 'file.openSample', '-', 'file.save', 'file.saveAs', '-', 'file.importDXF', 'file.traceImage', '-', 'file.export', '-', 'project.settings'],
-  Edit: ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.selectAll', 'edit.deselect', '-', 'snap.toggleGrid', 'snap.toggleObjects', 'snap.toggleAngle'],
+  Edit: ['edit.undo', 'edit.redo', '-', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.duplicate', 'edit.delete', '-', 'edit.mirrorStair', 'edit.flipStairDirection', '-', 'edit.selectAll', 'edit.deselect', '-', 'snap.toggleGrid', 'snap.toggleObjects', 'snap.toggleAngle'],
   View: [
     'view.mode.plan',
     'view.mode.split',

@@ -185,8 +185,10 @@ export interface Stair extends ElementBase {
   tread: number;
   /** Maximum allowed riser height in mm; riser count = ceil(rise / maxRiser). */
   maxRiser: number;
-  /** For l/u shapes: turn direction. */
+  /** For l/u shapes: turn direction. Spirals: winding direction going up. */
   turn: 'left' | 'right';
+  /** For l/u shapes: treads in the first flight (before the landing). Undefined = half of them. */
+  firstFlightTreads?: number;
   /** Spiral only: outer radius uses width; this is the central column radius. */
   innerRadius?: number;
 }

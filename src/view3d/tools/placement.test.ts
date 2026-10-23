@@ -149,6 +149,15 @@ describe('furniture placement', () => {
     expect(stair.position).toEqual({ x: -2000, y: -4000 });
     expect(stair.rotation).toBe(180);
 
+    // M mirrors the stair in hand before it is placed (an L stair turns the other way).
+    const l = fakeEnv(ctx, 'stair-l', { yaw: 0 });
+    const lt = new StairTool(l.env);
+    expect(lt.key({ key: 'm', shiftKey: false, ctrlKey: false, altKey: false })).toBe(true);
+    lt.use(floorHit(p, { x: -6000, y: -8000 }));
+    const mirrored = ofType(ctx, 'stair').find((x) => x.position.x === -6000) as Stair;
+    expect(mirrored.shape).toBe('l-shape');
+    expect(mirrored.turn).toBe('right');
+
     const c = fakeEnv(ctx, 'column-round');
     const tool = new ColumnTool(c.env);
     tool.use(floorHit(p, { x: -2740, y: -5260 }));

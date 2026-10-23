@@ -5,7 +5,7 @@
  * Conventions: `position` is the centre of the bottom edge of the first tread; `rotation` is the
  * direction of travel going up. Treads = risers − 1 (the last riser lands on the floor above).
  */
-import { add, dirFromDeg, perp, scale } from './math2d';
+import { add, angleDeg, dirFromDeg, dot, perp, scale, sub } from './math2d';
 import type { Stair, Vec2 } from './types';
 
 export interface StairStep {
@@ -108,7 +108,7 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
   }
 
   // Two flights with a landing that counts as one tread level.
-  const t1 = Math.ceil((T - 1) / 2);
+  const t1 = Math.min(T - 2, Math.max(1, Math.round(stair.firstFlightTreads ?? Math.ceil((T - 1) / 2))));
   const t2 = T - 1 - t1;
   const landTop = (t1 + 1) * rh;
   const side = stair.turn === 'left' ? 1 : -1;
@@ -151,6 +151,68 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
   }
   return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
 }
+
+/**
+ * Mirror image of a stair (left ↔ right), in place: the footprint keeps its position, L/U stairs turn
+ * the other way, spirals wind the other way from the same first step, one-sided handrails swap.
+ */
+export function mirrorStair(stair: Stair, levelHeight: number): Stair {
+  const out: Stair = { ...stair, turn: stair.turn === 'left' ? 'right' : 'left', ...swappedRails(stair) };
+  if (stair.shape === 'spiral') return out;
+  // Reflect across the footprint's centre line along the direction of travel: lateral l → l0 + l1 − l.
+  const s = perp(dirFromDeg(stair.rotation));
+  let l0 = Infinity;
+  let l1 = -Infinity;
+  for (const poly of computeStairLayout(stair, levelHeight).footprint)
+    for (const p of poly) {
+      const l = dot(sub(p, stair.position), s);
+      l0 = Math.min(l0, l);
+      l1 = Math.max(l1, l);
+    }
+  return { ...out, position: roundPoint(add(stair.position, scale(s, l0 + l1))) };
+}
+
+/**
+ * The same stair walked the other way (up ↔ down), in place: the top becomes the foot, L/U stairs
+ * keep their landing (the flights swap lengths), spirals start from the old top step.
+ */
+export function reverseStair(stair: Stair, levelHeight: number): Stair {
+  const layout = computeStairLayout(stair, levelHeight);
+  const rails = swappedRails(stair);
+  if (stair.shape === 'spiral') {
+    const sign = stair.turn === 'right' ? -1 : 1;
+    const rotation = normDeg(stair.rotation + sign * layout.treads.length * SPIRAL_DEGREES_PER_TREAD);
+    return { ...stair, ...rails, rotation, turn: stair.turn === 'left' ? 'right' : 'left' };
+  }
+  const flights = layout.flights ?? [];
+  const last = flights[flights.length - 1];
+  if (!last) return stair;
+  const position = roundPoint(add(last.start, scale(last.direction, last.treadIndices.length * last.going)));
+  const rotation = normDeg(angleDeg(scale(last.direction, -1)));
+  if (flights.length === 1) return { ...stair, ...rails, position, rotation };
+  return {
+    ...stair,
+    ...rails,
+    position,
+    rotation,
+    turn: stair.turn === 'left' ? 'right' : 'left',
+    firstFlightTreads: last.treadIndices.length,
+  };
+}
+
+/** A one-sided handrail (`props.handrail` 'left' / 'right') on the other side; {} when unchanged. */
+function swappedRails(stair: Stair): Partial<Stair> {
+  const side = stair.props?.handrail;
+  if (side !== 'left' && side !== 'right') return {};
+  return { props: { ...stair.props, handrail: side === 'left' ? 'right' : 'left' } };
+}
+
+const normDeg = (d: number): number => {
+  const r = Math.round((((d % 360) + 360) % 360) * 1e6) / 1e6;
+  return r === 360 ? 0 : r;
+};
+
+const roundPoint = (p: Vec2): Vec2 => ({ x: Math.round(p.x * 1000) / 1000, y: Math.round(p.y * 1000) / 1000 });
 
 function range(a: number, b: number): number[] {
   return Array.from({ length: Math.max(0, b - a) }, (_, i) => a + i);

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAppContext } from '../../app/context';
 import { createSampleProject } from '../../app/sample';
 import type { AppContext } from '../../app/state';
-import type { Wall } from '../../core/types';
+import type { Stair, Wall } from '../../core/types';
 import type { PlanHandle } from '../../plan2d/types';
 import type { ViewportHandle } from '../../view3d/types';
 import { isModalOpen } from '../dialogs/modal';
@@ -138,6 +138,25 @@ describe('mountApp', () => {
     expect(ctx.selection.get()[0]).not.toBe(furn.id);
     press({ key: 'Delete' });
     expect(ctx.store.elements.length).toBe(n);
+  });
+
+  it('M mirrors and Shift+M flips the direction of the selected stair, each in one undo step', () => {
+    const stair = ctx.store.elements.find((e): e is Stair => e.type === 'stair')!;
+    ctx.selection.set([stair.id]);
+    press({ key: 'm' });
+    expect((ctx.store.getElement(stair.id) as Stair).turn).not.toBe(stair.turn);
+    expect(ctx.store.undoLabel).toBe('Mirror stair');
+    press({ key: 'M', shiftKey: true });
+    const flipped = ctx.store.getElement(stair.id) as Stair;
+    expect(flipped.position).not.toEqual(stair.position);
+    expect(ctx.store.undoLabel).toBe('Flip direction of stair');
+    press({ key: 'z', ctrlKey: true });
+    press({ key: 'z', ctrlKey: true });
+    expect(ctx.store.getElement(stair.id)).toEqual(stair);
+    // Nothing happens without a stair in the selection.
+    ctx.selection.clear();
+    press({ key: 'm' });
+    expect(ctx.store.getElement(stair.id)).toEqual(stair);
   });
 
   it('copy / paste offsets onto the active level in one undo step', () => {

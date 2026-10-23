@@ -106,7 +106,10 @@ export class FurnitureTool implements PlanTool {
 export class StairTool implements PlanTool {
   readonly name = 'stair';
   private rotation: number;
+  /** Mirrored ghost (M): the turn opposite to the catalog item's. */
+  private mirrored = false;
   private press: { at: Vec2; screen: Vec2 } | null = null;
+  private lastMove: ToolPointer | null = null;
 
   constructor(private host: ToolHost) {
     const t = template(host.item);
@@ -114,18 +117,24 @@ export class StairTool implements PlanTool {
   }
 
   activate(): void {
-    this.host.setHint(`${this.host.item.name}: click to place the foot of the stair · drag to set the direction of travel · R rotates 90°`);
+    this.host.setHint(`${this.host.item.name}: click to place the foot of the stair · drag to set the direction of travel · R rotates 90° · M mirrors`);
   }
 
   busy(): boolean {
     return !!this.press;
   }
 
+  private make(p: Vec2, rotation: number): Stair {
+    const st = makeFromItem<Stair>(this.host, { position: p, rotation });
+    return this.mirrored ? { ...st, turn: st.turn === 'left' ? 'right' : 'left' } : st;
+  }
+
   private ghostAt(p: Vec2, rotation: number): Stair {
-    return { ...makeFromItem<Stair>(this.host, { position: p, rotation }), id: '__ghost_stair' };
+    return { ...this.make(p, rotation), id: '__ghost_stair' };
   }
 
   pointerMove(e: ToolPointer): void {
+    this.lastMove = e;
     const host = this.host;
     const items: OverlayItem[] = [];
     if (this.press) {
@@ -148,15 +157,19 @@ export class StairTool implements PlanTool {
 
   pointerUp(e: ToolPointer): void {
     if (!this.press) return;
-    const st = makeFromItem<Stair>(this.host, { position: this.press.at, rotation: this.rotation });
+    const st = this.make(this.press.at, this.rotation);
     this.press = null;
     this.host.transact('Place stair', (tx) => tx.add(st));
     this.pointerMove(e);
   }
 
   keyDown(e: KeyboardEvent): boolean {
-    if (e.key.toLowerCase() !== 'r' || e.ctrlKey || e.metaKey) return false;
-    this.rotation = normDeg(this.rotation + (e.shiftKey ? 15 : 90));
+    const k = e.key.toLowerCase();
+    if (e.ctrlKey || e.metaKey) return false;
+    if (k === 'm' && !e.shiftKey) this.mirrored = !this.mirrored;
+    else if (k === 'r') this.rotation = normDeg(this.rotation + (e.shiftKey ? 15 : 90));
+    else return false;
+    if (this.lastMove) this.pointerMove(this.lastMove);
     return true;
   }
 
