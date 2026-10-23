@@ -279,7 +279,12 @@ async function coverSheet(project: Project, spec: SheetSpec, sheets: Sheet[], en
       const blob = await env.viewport.captureImage({ width: pxW, height: Math.round(pxW / ratio) });
       const data = new Uint8Array(await blob.arrayBuffer());
       const jpeg = blob.type === 'image/jpeg';
-      sheet.images.push({ ...img, data, format: jpeg ? 'JPEG' : 'PNG' });
+      // Letterbox to the image's own aspect ratio.
+      const dim = pngSize(data);
+      const aspect = dim ? dim.w / dim.h : ratio;
+      const w = Math.min(img.w, img.h * aspect);
+      const h = w / aspect;
+      sheet.images.push({ x: img.x + (img.w - w) / 2, y: img.y + (img.h - h) / 2, w, h, data, format: jpeg ? 'JPEG' : 'PNG' });
       placed = true;
     } catch {
       placed = false;
@@ -296,6 +301,15 @@ async function coverSheet(project: Project, spec: SheetSpec, sheets: Sheet[], en
     }
   }
   return finishSheet(sheet, b);
+}
+
+/** Pixel size from a PNG header, if the bytes are a PNG. */
+export function pngSize(b: Uint8Array): { w: number; h: number } | null {
+  if (b.length < 24 || b[0] !== 0x89 || b[1] !== 0x50 || b[2] !== 0x4e || b[3] !== 0x47) return null;
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const w = v.getUint32(16);
+  const h = v.getUint32(20);
+  return w > 0 && h > 0 ? { w, h } : null;
 }
 
 function wrap(text: string, h: number, maxW: number): string[] {
