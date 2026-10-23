@@ -67,7 +67,7 @@ function fileBaseName(project: Project): string {
 /** Serialise `project` to an IFC4 STEP file (see module doc). */
 export function buildIFC(project: Project, options: IfcBuildOptions = {}): string {
   const now = options.now ?? new Date();
-  const levels = project.levels.filter((l) => !options.levelIds || options.levelIds.includes(l.id));
+  const levels = project.levels.filter((l) => !options.levelIds?.length || options.levelIds.includes(l.id));
   const m = new IfcModel({
     namespace: project.id,
     author: project.info.author,

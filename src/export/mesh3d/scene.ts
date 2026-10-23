@@ -130,7 +130,7 @@ export function buildExportScene(project: Project, options: ExportSceneOptions =
   const materials = new ExportMaterials(options.materialNames ?? 'name');
   const gctx = createGeometryContext(project);
   const includeFurniture = options.includeFurniture ?? true;
-  const levels = project.levels.filter((l) => !options.levelIds || options.levelIds.includes(l.id));
+  const levels = project.levels.filter((l) => !options.levelIds?.length || options.levelIds.includes(l.id));
   const elements = Object.values(project.elements);
 
   for (const level of levels) {

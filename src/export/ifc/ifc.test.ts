@@ -9,7 +9,9 @@ import { dirname, join } from 'node:path';
 import * as WebIFC from 'web-ifc';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSampleProject } from '../../app/sample';
+import { generate3D } from '../../core/autobuild';
 import { createElement, createProject } from '../../core/defaults';
+import { DocumentStore } from '../../core/store';
 import type { Door, Element, Project, Wall, Window } from '../../core/types';
 import { computeWallFootprints, wallHeight } from '../../core/walls';
 import { polygonArea } from '../../core/math2d';
@@ -528,6 +530,30 @@ describe('IFC4 export — options and edge cases', () => {
     expect(beam.max[1]).toBeCloseTo(3, 3);
     expect(beam.min[1]).toBeCloseTo(2.6, 3);
     expect(beam.volume).toBeCloseTo((0.2 * 0.4 * Math.hypot(4000, 2000)) / 1000, 4);
+    expect(webIfcLog).toEqual([]);
+    api.CloseModel(model);
+  });
+
+  it('exports a "Generate 3D" project (auto rooms, floors, ceilings, foundation, roof)', () => {
+    const store = new DocumentStore(createSampleProject());
+    for (const id of Object.keys(store.project.elements)) {
+      const e = store.project.elements[id];
+      if (e.type === 'slab' || e.type === 'roof' || e.type === 'room') store.remove(id);
+    }
+    generate3D(store, { rooms: true, floors: true, ceilings: true, foundation: true, roof: 'hip' });
+    const p = store.snapshot();
+    const text = exportText(p, {}, 'generated');
+    const model = open(text);
+    const coverings = idsOf(model, WebIFC.IFCCOVERING);
+    expect(coverings.length).toBe(countOf(p, (e) => e.type === 'slab' && e.kind === 'ceiling'));
+    expect(coverings.length).toBeGreaterThan(0);
+    expect(idsOf(model, WebIFC.IFCSPACE).length).toBe(countOf(p, (e) => e.type === 'room'));
+    expect(idsOf(model, WebIFC.IFCROOF)).toHaveLength(1);
+    const stats = meshStats(model);
+    for (const t of [WebIFC.IFCCOVERING, WebIFC.IFCSLAB, WebIFC.IFCROOF]) for (const id of idsOf(model, t)) expect(stats.get(id)?.triangles ?? 0).toBeGreaterThan(0);
+    // Auto-generated elements keep their Crafting props in a custom property set.
+    expect(text).toContain("'Crafting_Properties'");
+    expect(text).toContain("IFCPROPERTYSINGLEVALUE('autogen',$,IFCBOOLEAN(.T.),$)");
     expect(webIfcLog).toEqual([]);
     api.CloseModel(model);
   });
