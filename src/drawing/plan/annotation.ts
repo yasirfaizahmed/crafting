@@ -7,7 +7,7 @@ import { add, boundsOf, dot, normalize, perp, pointInPolygon, polygonArea, rotat
 import type { Dimension, Label, Opening, Room, Vec2, Wall } from '../../core/types';
 import { formatArea } from '../../core/units';
 import { wallDirection, wallFaceOffsets, wallNormal } from '../../core/walls';
-import { dimensionTextFits, outsideTextPosition } from '../dimension';
+import { DIM_STYLE, dimensionTextFits, formatDimension, outsideTextPosition, readableAngle } from '../dimension';
 import { arcPoints } from '../geom';
 import { PEN, TEXT } from '../layers';
 import { textWidth } from '../text';
@@ -276,17 +276,50 @@ export function drawExteriorChains(ctx: PlanContext, extent: Bounds2): Dimension
     );
     const lineCoord = Math.max(faceCoord, extentCoord) + mm(ctx, CHAIN_FIRST + k * CHAIN_STEP);
     const base = (t: number): Vec2 => add(scale(s.axis, t), scale(s.normal, faceCoord));
-    for (let i = 0; i + 1 < ch.positions.length; i++) {
-      const a = base(ch.positions[i]);
-      const c = base(ch.positions[i + 1]);
-      const u = s.axis;
-      // Offset is measured along perp(a→b) (left of the dimension direction).
-      const offset = (lineCoord - faceCoord) * dot(s.normal, perp(u));
-      const d = { a, b: c, offset };
-      const extra: { tag: string; textPosition?: Vec2; extensionLength: number } = { tag: `chain-${ch.side}-${ch.kind}`, extensionLength: k === 0 ? CHAIN_FIRST - 2 : CHAIN_STEP - 1 };
-      if (!dimensionTextFits(d, ctx.scale, ctx.b.units)) extra.textPosition = outsideTextPosition(d, i === 0 ? 'a' : 'b', ctx.scale, ctx.b.units);
-      ctx.b.dimension('A-ANNO-DIMS', a, c, offset, extra);
-    }
+    const u = s.axis;
+    // Offset is measured along perp(a→b) (left of the dimension direction).
+    const offset = (lineCoord - faceCoord) * dot(s.normal, perp(u));
+    const tag = `chain-${ch.side}-${ch.kind}`;
+    const extensionLength = k === 0 ? CHAIN_FIRST - 2 : CHAIN_STEP - 1;
+    const segs = ch.positions.slice(0, -1).map((t0, i) => {
+      const t1 = ch.positions[i + 1];
+      const text = formatDimension(t1 - t0, ctx.b.units);
+      return { t0, t1, text, w: textWidth(text, DIM_STYLE.textHeight) * ctx.scale, fits: dimensionTextFits({ a: base(t0), b: base(t1) }, ctx.scale, ctx.b.units) };
+    });
+    // Text placement along the chain: fitting texts first, the others outside the segment where
+    // there is room (after, before), else on a second row above.
+    const pad = mm(ctx, 0.8);
+    const rows: [number, number][][] = [[], []];
+    const free = (row: number, lo: number, hi: number) => rows[row].every(([a, b]) => hi + pad <= a || lo - pad >= b);
+    const pos: (null | { t: number; row: number })[] = segs.map(() => null);
+    segs.forEach((g) => {
+      if (!g.fits) return;
+      const m = (g.t0 + g.t1) / 2;
+      rows[0].push([m - g.w / 2, m + g.w / 2]);
+    });
+    segs.forEach((g, i) => {
+      if (g.fits) return;
+      const gap = mm(ctx, 1.6);
+      const cands = [
+        { t: g.t1 + gap + g.w / 2, row: 0 },
+        { t: g.t0 - gap - g.w / 2, row: 0 },
+        { t: (g.t0 + g.t1) / 2, row: 1 },
+      ];
+      const pick = cands.find((c) => free(c.row, c.t - g.w / 2, c.t + g.w / 2)) ?? cands[2];
+      rows[pick.row].push([pick.t - g.w / 2, pick.t + g.w / 2]);
+      pos[i] = pick;
+    });
+    const angle = readableAngle((Math.atan2(u.y, u.x) * 180) / Math.PI);
+    const up = { x: Math.cos(((angle + 90) * Math.PI) / 180), y: Math.sin(((angle + 90) * Math.PI) / 180) };
+    segs.forEach((g, i) => {
+      const extra: { tag: string; textPosition?: Vec2; extensionLength: number } = { tag, extensionLength };
+      const p = pos[i];
+      if (p) {
+        const lift = (DIM_STYLE.textGap + DIM_STYLE.textHeight / 2 + p.row * (DIM_STYLE.textHeight + 0.8)) * ctx.scale;
+        extra.textPosition = add(add(base(p.t), scale(s.normal, lineCoord - faceCoord)), scale(up, lift));
+      }
+      ctx.b.dimension('A-ANNO-DIMS', base(g.t0), base(g.t1), offset, extra);
+    });
   }
   return chains;
 }

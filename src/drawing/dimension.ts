@@ -102,7 +102,7 @@ export function explodeDimension(d: DimensionEntity, drawingScale: number, units
 export function dimensionTextFits(d: Pick<DimensionEntity, 'a' | 'b' | 'text'>, drawingScale: number, units: UnitSystem): boolean {
   const len = length(sub(d.b, d.a));
   const label = d.text ?? formatDimension(len, units);
-  return textWidth(label, DIM_STYLE.textHeight) * drawingScale + DIM_STYLE.tick * drawingScale < len;
+  return (textWidth(label, DIM_STYLE.textHeight) + 1.2) * drawingScale < len;
 }
 
 /** Where to put text that does not fit: beyond the `end` of the dimension line, outside it. */
