@@ -25,19 +25,20 @@ describe('elevations', () => {
     const south = generateElevationDrawing(sample, 'south');
     expect(south.entities.filter((e) => e.layer === 'A-ELEV' && e.tag === 'face').length).toBeGreaterThan(5);
     let b = layerBounds(south, 'A-ELEV', 'face');
-    // Foundation from x = −125, porch column to x = 13 025; foundation bottom −300, block top +7 500.
-    expect(b.minX).toBeCloseTo(-125, 0);
+    // Roof eave overhang from x = −625 (outline −125 − 500 overhang), porch column to x = 13 025;
+    // foundation bottom −300; 30° gable ridge top at +8 612.5.
+    expect(b.minX).toBeCloseTo(-625, 0);
     expect(b.maxX).toBeCloseTo(13025, 0);
     expect(b.minY).toBeCloseTo(-300, 0);
-    expect(b.maxY).toBeCloseTo(7500, 0);
+    expect(b.maxY).toBeCloseTo(8612.5, 0);
     b = layerBounds(generateElevationDrawing(sample, 'north'), 'A-ELEV', 'face');
     expect(b.minX).toBeCloseTo(-13025, 0);
-    expect(b.maxX).toBeCloseTo(125, 0);
+    expect(b.maxX).toBeCloseTo(625, 0);
     b = layerBounds(generateElevationDrawing(sample, 'east'), 'A-ELEV', 'face');
     expect(b.minX).toBeCloseTo(-1025, 0);
-    expect(b.maxX).toBeCloseTo(8125, 0);
+    expect(b.maxX).toBeCloseTo(8625, 0);
     b = layerBounds(generateElevationDrawing(sample, 'west'), 'A-ELEV', 'face');
-    expect(b.minX).toBeCloseTo(-8125, 0);
+    expect(b.minX).toBeCloseTo(-8625, 0);
     expect(b.maxX).toBeCloseTo(1025, 0);
   });
 
