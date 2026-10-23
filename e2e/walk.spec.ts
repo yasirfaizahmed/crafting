@@ -89,7 +89,8 @@ test('walk mode: closed doors block, right-click opens them, lights switch', asy
   await page.mouse.click(lp.x, lp.y, { button: 'right' });
   await expect.poll(() => page.evaluate((id) => (window as any).crafting.store.getElement(id).lightOn, light.id)).toBe(false);
   expect(await page.evaluate(() => (window as any).crafting.store.undoLabel)).toBe('Switch light off');
-  await expect.poll(async () => (await stats(page)).lights).toBeLessThan(lightsOn);
+  // (The light pool refreshes on the next frame; SwiftShader frames can take seconds.)
+  await expect.poll(async () => (await stats(page)).lights, { timeout: 20_000 }).toBeLessThan(lightsOn);
   await shot(page, 'walk-light-off');
   expect(errors).toEqual([]);
 });
