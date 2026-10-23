@@ -2,7 +2,8 @@
  * Edit handles for selected elements and how dragging them changes the model (pure).
  */
 import { add, dirFromDeg, distance, dot, midpoint, normalize, perp, scale, sub } from '../core/math2d';
-import type { Element, Opening, Vec2 } from '../core/types';
+import { computeStairLayout, editableRuns } from '../core/stairs';
+import type { Element, Opening, Stair, StairRuns, Vec2 } from '../core/types';
 import { projectOntoWall, wallLength } from '../core/walls';
 import { dragWallEndpoint, type Patch, withVertex } from './edit-ops';
 import type { Handle } from './editor-types';
@@ -84,9 +85,10 @@ export function handlesFor(el: Element, ctx: HandleContext): Handle[] {
       }
       return out;
     }
+    case 'stair':
+      return [...stairHandles(el, ctx), ...rotateHandle(el, ctx)];
     case 'furniture':
     case 'column':
-    case 'stair':
     case 'label':
     case 'block': {
       const rr = rotateRadius(el);
@@ -104,11 +106,100 @@ export function handlesFor(el: Element, ctx: HandleContext): Handle[] {
   }
 }
 
+function rotateHandle(el: Element, ctx: HandleContext): Handle[] {
+  const rr = rotateRadius(el);
+  if (!rr) return [];
+  const dir = dirFromDeg(rotation(el) + 90);
+  return [H(el, 'rotate', add(rr.center, scale(dir, rr.r + ctx.px(26))), 'circle', 0, 'grab')];
+}
+
+/** Stretch handles of a straight-run stair: flight ends, flight sides, landing far edges, U-turn wells. */
+function stairHandles(st: Stair, ctx: HandleContext): Handle[] {
+  const layout = computeStairLayout(st, ctx.levelHeight);
+  if (!layout.runs || !layout.flights) return [];
+  const out: Handle[] = [];
+  layout.flights.forEach((f, i) => {
+    const run = f.treadIndices.length * f.going;
+    const left = perp(f.direction);
+    const end = add(f.start, scale(f.direction, run));
+    out.push(H(st, 'stair-end', end, 'diamond', i, 'move'));
+    if (run > ctx.px(24)) out.push(H(st, 'stair-width', add(add(f.start, scale(f.direction, run / 2)), scale(left, f.width / 2)), 'square', i, 'ew-resize'));
+    const l = layout.runs!.landings[i];
+    if (!l) return;
+    out.push(H(st, 'stair-depth', add(end, scale(f.direction, l.depth)), 'square', i, 'ns-resize'));
+    if (l.turn !== 'none' && l.angle === 180) {
+      const s = l.turn === 'left' ? 1 : -1;
+      out.push(H(st, 'stair-gap', add(end, scale(left, s * (f.width / 2 + l.gap))), 'diamond', i, 'ew-resize'));
+    }
+  });
+  return out;
+}
+
+/** The stair after dragging one of its stretch handles to `target` (null when nothing changes). */
+export function stretchStair(h: Handle, st: Stair, target: Vec2, levelHeight: number): Stair | null {
+  const layout = computeStairLayout(st, levelHeight);
+  const runs = editableRuns(st, levelHeight);
+  const i = h.index ?? 0;
+  const f = layout.flights?.[i];
+  if (!runs || !f) return null;
+  const left = perp(f.direction);
+  const end = add(f.start, scale(f.direction, f.treadIndices.length * f.going));
+  const r10 = (v: number) => Math.round(v / 10) * 10;
+  const next: StairRuns = { flights: runs.flights.map((x) => ({ ...x })), landings: runs.landings.map((x) => ({ ...x })) };
+  switch (h.kind) {
+    case 'stair-end': {
+      const steps = Math.max(i === 0 ? 1 : 0, Math.round(dot(sub(target, f.start), f.direction) / f.going));
+      if (steps === next.flights[i].treads) return null;
+      next.flights[i].treads = steps;
+      break;
+    }
+    case 'stair-width': {
+      const mid = add(f.start, scale(f.direction, (f.treadIndices.length * f.going) / 2));
+      next.flights[i].width = Math.max(300, r10(2 * Math.abs(dot(sub(target, mid), left))));
+      break;
+    }
+    case 'stair-depth': {
+      if (!next.landings[i]) return null;
+      next.landings[i].depth = Math.max(300, r10(dot(sub(target, end), f.direction)));
+      break;
+    }
+    case 'stair-gap': {
+      const l = layout.runs?.landings[i];
+      if (!l || !next.landings[i]) return null;
+      const s = l.turn === 'left' ? 1 : -1;
+      next.landings[i].gap = Math.max(0, r10(s * dot(sub(target, end), left) - f.width / 2));
+      break;
+    }
+    default:
+      return null;
+  }
+  return { ...st, runs: next };
+}
+
+/** Live readout while stretching a stair. */
+export function stairStretchLabel(h: Handle, st: Stair, levelHeight: number, fmt: (mm: number) => string): string {
+  const l = computeStairLayout(st, levelHeight);
+  const i = h.index ?? 0;
+  const r = l.runs;
+  switch (h.kind) {
+    case 'stair-end':
+      return `${r?.flights[i]?.treads ?? 0} steps · ${l.riserCount} risers × ${fmt(l.riserHeight)}`;
+    case 'stair-width':
+      return `Width ${fmt(r?.flights[i]?.width ?? st.width)}`;
+    case 'stair-depth':
+      return `Landing ${fmt(r?.landings[i]?.depth ?? 0)}`;
+    case 'stair-gap':
+      return `Well ${fmt(r?.landings[i]?.gap ?? 0)}`;
+    default:
+      return '';
+  }
+}
+
 /**
  * Apply a handle drag. `base` is the element as it was when the drag started; `target` the
  * (snapped) pointer position. Returns the resulting patch.
  */
-export function applyHandle(h: Handle, base: Element, target: Vec2, ctx: { elements: Record<string, Element>; freeAngle: boolean }): Patch {
+export function applyHandle(h: Handle, base: Element, target: Vec2, ctx: { elements: Record<string, Element>; freeAngle: boolean; levelHeight?: number }): Patch {
   const patch: Patch = new Map();
   const set = (el: Element) => patch.set(el.id, el);
   switch (h.kind) {
@@ -154,6 +245,15 @@ export function applyHandle(h: Handle, base: Element, target: Vec2, ctx: { eleme
         const pos = sub(center, r(half, next));
         set({ ...base, rotation: next, position: { ...base.position, x: pos.x, y: pos.y } });
       } else set({ ...base, rotation: next } as Element);
+      break;
+    }
+    case 'stair-end':
+    case 'stair-width':
+    case 'stair-depth':
+    case 'stair-gap': {
+      if (base.type !== 'stair') break;
+      const st = stretchStair(h, base, target, ctx.levelHeight ?? 3000);
+      if (st) set(st);
       break;
     }
     case 'opening-a':

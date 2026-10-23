@@ -7,7 +7,7 @@ import { add, distance, sub } from '../../core/math2d';
 import type { Door, Element, Label, Opening, Room, Vec2 } from '../../core/types';
 import { moveElements, type Patch, rotated, withInsertedVertex } from '../edit-ops';
 import type { Handle, OverlayItem } from '../editor-types';
-import { applyHandle, handlesFor } from '../handles';
+import { applyHandle, handlesFor, stairStretchLabel } from '../handles';
 import { elementsInBox } from '../shapes';
 import type { PlanTool, ToolHost, ToolPointer } from './types';
 
@@ -284,7 +284,8 @@ export class SelectTool implements PlanTool {
     }
     const items: OverlayItem[] = [];
     let target = e.world;
-    if (h.kind !== 'rotate' && h.kind !== 'offset' && h.kind !== 'opening-a' && h.kind !== 'opening-b') {
+    const stretching = h.kind.startsWith('stair-');
+    if (h.kind !== 'rotate' && h.kind !== 'offset' && h.kind !== 'opening-a' && h.kind !== 'opening-b' && !stretching) {
       const exclude = new Set<string>([base.id]);
       let from: Vec2 | undefined;
       if (base.type === 'wall') {
@@ -304,8 +305,9 @@ export class SelectTool implements PlanTool {
       for (const g of s.guides) items.push({ t: g.kind === 'angle' ? 'line' : 'guide', a: g.from, b: g.to } as OverlayItem);
       if (from) items.push({ t: 'dim', a: from, b: target, offset: 22, text: host.fmt(distance(from, target)) });
     }
-    this.patch = applyHandle(h, base, target, { elements: host.app.store.project.elements, freeAngle: e.shift });
+    this.patch = applyHandle(h, base, target, { elements: host.app.store.project.elements, freeAngle: e.shift, levelHeight: host.level.height });
     const after = this.patch.get(base.id);
+    if (after?.type === 'stair' && stretching) items.push({ t: 'tag', p: e.world, text: stairStretchLabel(h, after, host.level.height, (v) => host.fmt(v)), tone: 'accent' });
     if (after && h.kind === 'rotate' && 'rotation' in after) items.push({ t: 'tag', p: e.world, text: `${Math.round((after as { rotation: number }).rotation)}°`, tone: 'accent' });
     if (after && (after.type === 'door' || after.type === 'window') && (h.kind === 'opening-a' || h.kind === 'opening-b')) items.push({ t: 'tag', p: e.world, text: `Width ${host.fmt((after as Opening).width)}`, tone: 'accent' });
     host.setPreview(this.patch);

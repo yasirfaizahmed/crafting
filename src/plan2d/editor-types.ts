@@ -28,7 +28,22 @@ export interface Handle {
   /** Stable id: `${elementId}:${kind}:${index}`. */
   id: string;
   elementId: string;
-  kind: 'wall-start' | 'wall-end' | 'vertex' | 'insert' | 'rotate' | 'point-a' | 'point-b' | 'offset' | 'opening-a' | 'opening-b';
+  kind:
+    | 'wall-start'
+    | 'wall-end'
+    | 'vertex'
+    | 'insert'
+    | 'rotate'
+    | 'point-a'
+    | 'point-b'
+    | 'offset'
+    | 'opening-a'
+    | 'opening-b'
+    /** Stairs: drag a flight's top end (steps), its side (width), a landing's far edge (depth) or a U-turn well (gap). */
+    | 'stair-end'
+    | 'stair-width'
+    | 'stair-depth'
+    | 'stair-gap';
   p: Vec2;
   index?: number;
   shape: HandleShape;

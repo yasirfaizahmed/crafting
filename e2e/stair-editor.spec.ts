@@ -53,3 +53,48 @@ test('stair flights editor: steps per flight, widths, landings, split and reset'
   await expect(editor.locator('.cr-stair-flight')).toHaveCount(3);
   expect(errors).toEqual([]);
 });
+
+test('stretch a stair in the plan by dragging its handles', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto('/');
+  await page.waitForFunction(() => !!(window as any).crafting);
+  const id = await page.evaluate(() => {
+    const c = (window as any).crafting;
+    const level = c.store.project.levels[0].id;
+    const st = { id: 'str_stretch', type: 'stair', levelId: level, position: { x: -9000, y: 0 }, rotation: 90, width: 1000, shape: 'l-shape', tread: 280, maxRiser: 175, turn: 'right', materialId: 'wood-oak' };
+    c.store.add(st);
+    c.ui.set({ viewMode: 'plan', activeLevelId: level, hotbar: ['tool-select', ...c.ui.get().hotbar.slice(1)], hotbarIndex: 0 });
+    c.selection.set([st.id]);
+    c.events.emit('zoom-to', { ids: [st.id] });
+    return st.id;
+  });
+  await page.waitForTimeout(700);
+  const stair = () => page.evaluate((id) => (window as any).crafting.store.getElement(id), id);
+  const toClient = (x: number, y: number) =>
+    page.evaluate(([x, y]) => (document.querySelector('canvas.p2d-canvas') as any).__plan.worldToClient(x, y), [x, y] as const);
+  await page.screenshot({ path: 'test-results/stair-stretch-0.png' });
+
+  // First flight: 8 treads × 280 from y = 0 runs to y = 2240. Drag its end 3 treads further.
+  const from = await toClient(-9000, 8 * 280);
+  const to = await toClient(-9000, 11 * 280 + 40);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 });
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await page.screenshot({ path: 'test-results/stair-stretch-1-dragging.png' });
+  await page.mouse.up();
+  await expect.poll(async () => (await stair()).runs?.flights[0].treads).toBe(11);
+
+  // Widen the first flight by dragging its left side 150 mm out (left of +y travel is −x).
+  const w0 = await toClient(-9000 - 500, (11 * 280) / 2);
+  const w1 = await toClient(-9000 - 650, (11 * 280) / 2);
+  await page.mouse.move(w0.x, w0.y);
+  await page.mouse.down();
+  await page.mouse.move(w1.x, w1.y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await stair()).runs?.flights[0].width).toBe(1300);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: 'test-results/stair-stretch-2.png' });
+  expect(errors).toEqual([]);
+});
