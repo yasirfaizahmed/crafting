@@ -46,7 +46,10 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch | null {
     indices.push(found);
     ti = found + 1;
   }
-  return { score: score - text.length * 0.1, indices };
+  score -= text.length * 0.1;
+  // Scattered letters across unrelated words are noise ("bed" → "Brick — Red"): require quality.
+  if (q.replace(/ /g, '').length >= 3 && score < 3.5 * q.length) return null;
+  return { score, indices };
 }
 
 /** Rank items by the best score over their searchable strings; ties keep the input order. */
