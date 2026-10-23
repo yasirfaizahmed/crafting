@@ -215,7 +215,7 @@ export class PlanEditor implements UnderlayHost {
   }
 
   hit(p: Vec2, opts: { types?: ElementType[]; exclude?: Set<string>; areas?: boolean; tolPx?: number } = {}): Element | undefined {
-    const ctx = { elements: this.app.store.project.elements, footprints: this.footprints(), level: this.level };
+    const ctx = { elements: this.app.store.project.elements, footprints: this.footprints(), level: this.level, levels: this.app.store.project.levels };
     return hitTest(this.levelElements(), ctx, p, this.tol(opts.tolPx ?? 6), opts);
   }
 
@@ -610,6 +610,7 @@ export class PlanEditor implements UnderlayHost {
       gridSize: project.settings.gridSize,
       cursor: this.hovered ? this.cursorWorld : null,
       northAngle: project.settings.northAngle ?? 0,
+      levels: project.levels,
     };
   }
 

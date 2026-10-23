@@ -142,6 +142,11 @@ export interface Slab extends ElementBase {
   /** Top of slab relative to the level elevation (mm). Floor slabs: 0, ceilings: level.height. */
   topOffset: number;
   kind: SlabKind;
+  /**
+   * Stairs rising through this slab cut an opening automatically (core/stairwells.ts).
+   * Undefined = true; set false to keep the slab solid.
+   */
+  stairOpenings?: boolean;
 }
 
 export type RoofShape = 'flat' | 'gable' | 'hip' | 'shed' | 'pyramid';

@@ -266,7 +266,7 @@ export function mountProperties(container: HTMLElement, shell: Shell): Propertie
       glyph.textContent = one ? elementIcon(one) : '▦';
       if (one) {
         title.textContent = elementName(one);
-        sub.textContent = [schemaFor(one.type).title, elementDetail(one, units()), store.getLevel(one.levelId)?.name].filter(Boolean).join(' · ');
+        sub.textContent = [schemaFor(one.type).title, elementDetail(one, units(), store.project), store.getLevel(one.levelId)?.name].filter(Boolean).join(' · ');
       } else {
         title.textContent = `${cur.length} elements`;
         const byType = new Map<string, number>();

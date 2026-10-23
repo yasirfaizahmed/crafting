@@ -23,6 +23,7 @@ import {
   lineIntersection,
 } from '../core/math2d';
 import { computeStairLayout } from '../core/stairs';
+import { slabHoles } from '../core/stairwells';
 import type { Block, Dimension, Element, ElementType, Furniture, Label, Level, Opening, Vec2, Wall } from '../core/types';
 import { pointAtOffset, wallDirection, wallFaceOffsets, wallLength, wallNormal, type WallFootprint } from '../core/walls';
 
@@ -33,6 +34,8 @@ export interface ShapeContext {
   elements: Record<string, Element>;
   footprints: Map<string, WallFootprint>;
   level?: Pick<Level, 'height'>;
+  /** All project levels; enables automatic stairwell openings in slab hit-testing. */
+  levels?: readonly Level[];
 }
 
 /** Local frame of an opening in its host wall. */
@@ -212,7 +215,7 @@ export function hitTest(els: Element[], ctx: ShapeContext, p: Vec2, tol: number,
       if (poly.length < 2) continue;
       const pin = poly.length >= 3 && pointInPolygon(p, poly);
       const pd = pin ? 0 : distanceToPolygon(p, poly);
-      if (pin && el.type === 'slab' && (el.holes ?? []).some((h) => pointInPolygon(p, h))) continue;
+      if (pin && el.type === 'slab' && slabHoles(ctx.levels ? { elements: ctx.elements, levels: [...ctx.levels] } : null, el).some((h) => pointInPolygon(p, h))) continue;
       if (pin) inside = true;
       d = Math.min(d, pd);
       area = Math.min(area, poly.length >= 3 ? polygonArea(poly) : 0);

@@ -53,6 +53,8 @@ export interface RenderScene {
   gridSize: number;
   cursor: Vec2 | null;
   northAngle: number;
+  /** All project levels (automatic stairwell openings). */
+  levels?: readonly Level[];
 }
 
 const ORDER: Partial<Record<Element['type'], number>> = {
@@ -75,12 +77,12 @@ export function renderPlan(g: CanvasRenderingContext2D, view: Viewport, dpr: num
   if (scene.showGrid) drawGrid(p, scene.gridSize);
 
   if (scene.below) {
-    const bdc: DrawCtx = { p, pal: BELOW_PAL, elements: scene.elements, footprints: scene.below.footprints, level: scene.below.level, units: scene.units };
+    const bdc: DrawCtx = { p, pal: BELOW_PAL, elements: scene.elements, footprints: scene.below.footprints, level: scene.below.level, units: scene.units, levels: scene.levels };
     drawWalls(bdc, scene.below.elements.filter((e): e is Wall => e.type === 'wall' && !e.hidden), []);
   }
 
   const levelEls = Object.values(scene.elements).filter((e) => e.levelId === scene.level.id && !e.hidden);
-  const dc: DrawCtx = { p, pal: PAL, elements: scene.elements, footprints: scene.footprints, level: scene.level, units: scene.units };
+  const dc: DrawCtx = { p, pal: PAL, elements: scene.elements, footprints: scene.footprints, level: scene.level, units: scene.units, levels: scene.levels };
 
   // Floors, spaces and loose items under the walls.
   const under = levelEls.filter((e) => ORDER[e.type] !== undefined).sort((a, b) => ORDER[a.type]! - ORDER[b.type]!);

@@ -7,6 +7,7 @@ import { getFurniture } from '../../core/catalog';
 import { getMaterial } from '../../core/materials';
 import { add, dirFromDeg, distance, normalize, perp, polygonArea, scale, sub } from '../../core/math2d';
 import { computeStairLayout } from '../../core/stairs';
+import { slabHoles } from '../../core/stairwells';
 import type {
   Beam,
   Block,
@@ -41,6 +42,8 @@ export interface DrawCtx {
   footprints: Map<string, WallFootprint>;
   level: Pick<Level, 'height'>;
   units: UnitSystem;
+  /** All project levels; enables automatic stairwell openings in slabs. */
+  levels?: readonly Level[];
 }
 
 const isGlass = (w: Wall) => getMaterial(w.materialId).category === 'glass';
@@ -319,7 +322,7 @@ export function drawSlab(dc: DrawCtx, s: Slab): void {
   p.dash(s.kind === 'foundation' ? [10, 5] : s.kind === 'ceiling' ? [10, 3, 2, 3] : [6, 4]);
   g.stroke();
   p.dash(null);
-  for (const h of s.holes ?? []) {
+  for (const h of dc.levels ? slabHoles({ elements: dc.elements, levels: [...dc.levels] }, s) : (s.holes ?? [])) {
     if (h.length < 3) continue;
     p.path(h);
     g.fillStyle = PAL.paper;
@@ -331,8 +334,9 @@ export function drawSlab(dc: DrawCtx, s: Slab): void {
     g.strokeStyle = pal.thin;
     p.lw(0.6);
     if (h.length >= 4) {
-      p.line(h[0], h[2]);
-      p.line(h[1], h[3]);
+      const n = h.length;
+      p.line(h[0], h[Math.floor(n / 2)]);
+      p.line(h[Math.floor(n / 4)], h[Math.floor((3 * n) / 4)]);
     }
   }
 }

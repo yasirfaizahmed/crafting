@@ -4,6 +4,7 @@
  */
 import { add, distance, dot, normalize, perp, rotate, scale, sub } from '../../core/math2d';
 import { materialFor } from '../../core/materials';
+import { slabHoles } from '../../core/stairwells';
 import type { Beam, Block, Column, Roof, Slab, Vec2 } from '../../core/types';
 import { ellipsePoints, offsetPolygon } from '../geom';
 import { PEN, TEXT } from '../layers';
@@ -18,13 +19,14 @@ export function drawSlab(ctx: PlanContext, s: Slab): void {
     const extra = s.kind === 'foundation' ? { linetype: 'hidden' as const, lineweight: PEN.fine, tag: 'foundation' } : { tag: s.kind };
     b.polyline('A-FLOR', s.outline, true, { ...id, ...extra });
   }
-  for (const h of s.holes ?? []) {
+  for (const h of slabHoles(ctx.project, s)) {
     if (h.length < 3) continue;
     b.polyline('A-FLOR', h, true, { ...id, tag: 'slab-opening', lineweight: PEN.thin });
-    // "Open to below" cross.
+    // "Open to below" cross (two diagonals; two diameters for round stairwells).
     if (h.length >= 4) {
-      b.line('A-FLOR', h[0], h[2], { ...id, tag: 'void-cross', lineweight: PEN.extraFine });
-      b.line('A-FLOR', h[1], h[3], { ...id, tag: 'void-cross', lineweight: PEN.extraFine });
+      const n = h.length;
+      b.line('A-FLOR', h[0], h[Math.floor(n / 2)], { ...id, tag: 'void-cross', lineweight: PEN.extraFine });
+      b.line('A-FLOR', h[Math.floor(n / 4)], h[Math.floor((3 * n) / 4)], { ...id, tag: 'void-cross', lineweight: PEN.extraFine });
     }
   }
 }

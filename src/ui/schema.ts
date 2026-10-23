@@ -9,6 +9,7 @@ import { getFurniture } from '../core/catalog';
 import { distance, polygonArea, polygonPerimeter } from '../core/math2d';
 import { DEFAULT_MATERIAL_FOR, getMaterial } from '../core/materials';
 import { computeStairLayout } from '../core/stairs';
+import { slabHoles } from '../core/stairwells';
 import type { DocumentStore } from '../core/store';
 import type { Element, ElementOfType, ElementType, Project, UnitSystem, Vec2 } from '../core/types';
 import { formatArea, formatLength, formatVolume, parseLength } from '../core/units';
@@ -199,6 +200,15 @@ export const ELEMENT_SCHEMAS: Record<ElementType, ElementSchema> = {
     { key: 'kind', label: 'Kind', kind: 'select', section: 'Identity', options: opts([['floor', 'Floor'], ['ceiling', 'Ceiling'], ['foundation', 'Foundation'], ['terrace', 'Terrace / deck']]) },
     { key: 'thickness', label: 'Thickness', kind: 'length', section: 'Dimensions', min: 10, step: 10 },
     { key: 'topOffset', label: 'Top offset', kind: 'length', section: 'Placement', step: 50, hint: 'Top of slab relative to the level' },
+    {
+      key: 'stairOpenings',
+      label: 'Cut openings for stairs',
+      kind: 'checkbox',
+      section: 'Options',
+      hint: 'Stairs rising through this slab leave an opening automatically',
+      get: (el) => el.stairOpenings !== false,
+      set: (_el, v) => ({ stairOpenings: v === true }),
+    },
     materialField() as FieldDef<ElementOfType<'slab'>>,
   ]),
   roof: typed('roof', 'Roof', [
@@ -505,11 +515,11 @@ export function computedInfo(el: Element, project: ProjectView, units: UnitSyste
       return rows;
     }
     case 'slab': {
-      const a = slabArea(el);
+      const a = slabArea(el, project);
       return [
         { label: 'Area', value: A(a) },
         { label: 'Perimeter', value: L(polygonPerimeter(el.outline)) },
-        { label: 'Openings', value: String(el.holes?.length ?? 0) },
+        { label: 'Openings', value: String(slabHoles(project, el).length) },
         { label: 'Volume', value: V(a * el.thickness) },
       ];
     }

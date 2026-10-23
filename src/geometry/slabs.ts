@@ -5,6 +5,7 @@
  */
 import { ensureCCW, pointInPolygon, signedArea, simplifyPolygon } from '../core/math2d';
 import { getMaterial, materialFor } from '../core/materials';
+import { slabHoles } from '../core/stairwells';
 import type { Slab, Vec2 } from '../core/types';
 import { levelElevation } from './cache';
 import { Model } from './model';
@@ -39,7 +40,7 @@ export function cleanHoles(outline: Vec2[], holes: Vec2[][] | undefined): Vec2[]
 export function buildSlab(ctx: GeometryContext, s: Slab): GeometryPart[] {
   const outline = cleanRing(s.outline);
   if (!outline.length || !(s.thickness > 0)) return [];
-  const holes = cleanHoles(outline, s.holes);
+  const holes = cleanHoles(outline, slabHoles(ctx.project, s));
   const top = levelElevation(ctx, s.levelId) + s.topOffset;
   const bottom = top - s.thickness;
   const mat = materialFor(s).id;

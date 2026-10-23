@@ -6,6 +6,7 @@ import { getFurniture } from '../core/catalog';
 import { distance, polygonArea, polygonPerimeter } from '../core/math2d';
 import { materialFor } from '../core/materials';
 import { computeStairLayout } from '../core/stairs';
+import { slabNetArea } from '../core/stairwells';
 import type { Column, Element, ElementType, Project, Slab, Wall } from '../core/types';
 import { formatArea, formatLength, formatVolume } from '../core/units';
 import type { UnitSystem } from '../core/types';
@@ -104,9 +105,9 @@ export function wallQuantity(project: Pick<Project, 'elements' | 'levels'>, w: W
   return { length, height, grossArea, openingArea, netArea, volume: netArea * w.thickness };
 }
 
-export function slabArea(s: Pick<Slab, 'outline' | 'holes'>): number {
-  const holes = (s.holes ?? []).reduce((a, h) => a + polygonArea(h), 0);
-  return Math.max(0, polygonArea(s.outline) - holes);
+/** Net slab area (mm²): outline minus drawn openings and, given the project, automatic stairwells. */
+export function slabArea(s: Slab, project?: Pick<Project, 'elements' | 'levels'>): number {
+  return slabNetArea(project, s);
 }
 
 export function columnVolume(project: Pick<Project, 'levels'>, c: Column): number {
@@ -121,7 +122,7 @@ export function elementVolume(project: Pick<Project, 'elements' | 'levels'>, el:
     case 'wall':
       return wallQuantity(project, el).volume;
     case 'slab':
-      return slabArea(el) * el.thickness;
+      return slabArea(el, project) * el.thickness;
     case 'column':
       return columnVolume(project, el);
     case 'beam':
@@ -178,7 +179,7 @@ export function computeQuantities(project: Pick<Project, 'elements' | 'levels'>,
         break;
       }
       case 'slab': {
-        const a = slabArea(el);
+        const a = slabArea(el, project);
         q.slabs.count++;
         q.slabs.area += a;
         q.slabs.volume += a * el.thickness;

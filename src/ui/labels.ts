@@ -4,7 +4,8 @@
 import { catalogItemForElement, getFurniture } from '../core/catalog';
 import { distance, polygonArea } from '../core/math2d';
 import { getMaterial } from '../core/materials';
-import type { Element, UnitSystem } from '../core/types';
+import { slabNetArea } from '../core/stairwells';
+import type { Element, Project, UnitSystem } from '../core/types';
 import { formatArea, formatLength } from '../core/units';
 import { wallLength } from '../core/walls';
 import { TYPE_ICONS, TYPE_LABELS } from './quantities';
@@ -41,8 +42,8 @@ export function elementName(el: Element): string {
   }
 }
 
-/** Secondary detail (size / material) for compact rows. */
-export function elementDetail(el: Element, units: UnitSystem): string {
+/** Secondary detail (size / material) for compact rows. With the project, slab areas are net of stair openings. */
+export function elementDetail(el: Element, units: UnitSystem, project?: Pick<Project, 'elements' | 'levels'>): string {
   switch (el.type) {
     case 'wall':
       return `${formatLength(wallLength(el), units)} · ${formatLength(el.thickness, units)}`;
@@ -50,6 +51,7 @@ export function elementDetail(el: Element, units: UnitSystem): string {
     case 'window':
       return `${formatLength(el.width, units)} × ${formatLength(el.height, units)}`;
     case 'slab':
+      return el.outline.length >= 3 ? formatArea(slabNetArea(project, el), units) : '';
     case 'room':
       return el.outline.length >= 3 ? formatArea(polygonArea(el.outline), units) : '';
     case 'roof':

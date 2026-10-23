@@ -15,6 +15,8 @@ export function affectedIds(project: Project, change: ChangeSet): Set<string> | 
     if (!el) return;
     out.add(el.id);
     if (el.type === 'wall') for (const id of wallDependents(project, el)) out.add(id);
+    // Stairs cut openings into the floors/ceilings they rise through (core/stairwells.ts).
+    if (el.type === 'stair') for (const s of Object.values(project.elements)) if (s.type === 'slab') out.add(s.id);
     if (el.type === 'door' || el.type === 'window') {
       out.add(el.hostId);
       const host = project.elements[el.hostId];

@@ -17,6 +17,7 @@ import { distance, polygonArea, polygonPerimeter, signedArea, simplifyPolygon } 
 import { getMaterial, materialFor } from '../../core/materials';
 import { detectOuterBoundaries } from '../../core/rooms';
 import { computeStairLayout } from '../../core/stairs';
+import { slabHoles } from '../../core/stairwells';
 import type { Beam, Block, Column, Door, Element, Furniture, Level, Opening, Project, Railing, Roof, Room, Slab, Stair, Vec2, Wall, Window } from '../../core/types';
 import {
   computeWallFootprints,
@@ -400,7 +401,7 @@ class LevelExporter {
     const m = this.m;
     const outer = cleanPolygon(s.outline);
     if (!outer || s.thickness <= 0) return;
-    const holes = (s.holes ?? []).map((h) => cleanPolygon(h, false)).filter((h): h is Vec2[] => !!h);
+    const holes = slabHoles(this.project, s).map((h) => cleanPolygon(h, false)).filter((h): h is Vec2[] => !!h);
     const mat = materialFor(s).id;
     const position = m.placement3({ x: 0, y: 0, z: s.topOffset - s.thickness, angle: 0 });
     const body = this.sweptBody([m.extrude(m.arbitraryProfile(outer, holes), s.thickness, position)], mat);

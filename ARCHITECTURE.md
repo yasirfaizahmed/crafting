@@ -83,6 +83,10 @@ detectRooms(project, levelId) → DetectedRoom[] {polygon (clear, CCW), centerPo
 roomAtPoint(project, levelId, p) → DetectedRoom | undefined   // e.g. slab "flood fill" click
 computeStairLayout(stair, levelHeight) → {riserCount, riserHeight, treads[{polygon, top}], landings, walkline, footprint}
 
+// Slab openings (core/stairwells.ts): stairs automatically cut the floors/ceilings they rise through.
+slabHoles(project, slab) → drawn holes + stairwell openings   // ALWAYS use this, never slab.holes, to render/export/measure
+slabNetArea(project, slab), stairwellOpenings(project, slab)   // slab.stairOpenings === false opts out
+
 // Catalog / materials
 CATALOG, getCatalogItem(id), catalogItemForElement(el), FURNITURE, getFurniture(id), DEFAULT_HOTBAR
 MATERIALS, getMaterial(id), materialFor(el)

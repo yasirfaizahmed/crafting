@@ -156,7 +156,7 @@ export function mountOutliner(container: HTMLElement, shell: Shell): OutlinerHan
           e.stopPropagation();
           toggleFlag(isSel ? [...selection.get()] : [item.id], 'locked');
         });
-        const detail = elementDetail(item, units);
+        const detail = elementDetail(item, units, store.project);
         const row = h(
           'div',
           {
