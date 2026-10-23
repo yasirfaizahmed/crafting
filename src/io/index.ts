@@ -13,7 +13,7 @@ import type { DocumentStore } from '../core/store';
 import type { Element, Project } from '../core/types';
 import { Autosaver, clearAutosaveIn, loadAutosave } from './autosave';
 import { dxfToWalls, inspectDXF } from './dxf';
-import { FileSession, type FilePickers } from './files';
+import { FileSession, readBlobText, type FilePickers } from './files';
 import { RecentProjects, type RecentProject } from './recent';
 import { createDefaultStore, type KVStore } from './storage';
 import { planThumbnail } from './thumbnail';
@@ -185,7 +185,7 @@ function pickFile(accept: string): Promise<File | null> {
 
 export async function pickTextFile(accept: string): Promise<{ name: string; text: string } | null> {
   const f = await pickFile(accept);
-  return f ? { name: f.name, text: await f.text() } : null;
+  return f ? { name: f.name, text: await readBlobText(f) } : null;
 }
 
 export async function pickImageFile(): Promise<{ name: string; dataUrl: string; width: number; height: number } | null> {

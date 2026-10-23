@@ -31,6 +31,17 @@ export interface FilePickers {
 
 const TYPES: PickerType[] = [{ description: 'Crafting project', accept: { [FILE_MIME]: [FILE_EXTENSION], 'application/json': ['.json'] } }];
 
+/** Blob → text (FileReader fallback for engines without Blob.text). */
+export function readBlobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsText(blob);
+  });
+}
+
 export function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
 }
@@ -76,7 +87,7 @@ export class FileSession {
       const handle = handles[0];
       if (!handle) return null;
       const file = await handle.getFile();
-      const project = parseProject(await file.text());
+      const project = parseProject(await readBlobText(file));
       this.handle = handle;
       this.projectId = project.id;
       this.name = file.name;
