@@ -3,7 +3,7 @@
  * free-form blocks (A-GENM) in plan.
  */
 import { add, distance, dot, normalize, perp, rotate, scale, sub } from '../../core/math2d';
-import { getMaterial } from '../../core/materials';
+import { materialFor } from '../../core/materials';
 import type { Beam, Block, Column, Roof, Slab, Vec2 } from '../../core/types';
 import { ellipsePoints, offsetPolygon } from '../geom';
 import { PEN, TEXT } from '../layers';
@@ -97,7 +97,7 @@ export function drawColumn(ctx: PlanContext, c: Column): void {
   }
   const outline = columnOutline(c);
   if (isCut) {
-    const mat = getMaterial(c.materialId ?? 'concrete');
+    const mat = materialFor(c);
     b.fill('S-COLS', outline, '#000000', { ...id, stroke: true, tag: 'column', ...(mat.category === 'wood' ? { fill: '#ffffff', hatch: 'wood' as const } : {}) });
   } else b.polyline('S-COLS', outline, true, { ...id, lineweight: PEN.thin, linetype: 'hidden', tag: 'column' });
 }
@@ -126,7 +126,7 @@ export function drawBlock(ctx: PlanContext, k: Block): void {
   const isCut = k.position.z <= ctx.cut && k.position.z + k.size.z > ctx.cut;
   const above = k.position.z > ctx.cut;
   const outline = blockOutline(k);
-  const mat = getMaterial(k.materialId ?? 'brick-red');
+  const mat = materialFor(k);
   const id = { elementId: k.id, tag: 'block' };
   if (isCut) {
     const hatch = mat.hatch === 'none' ? undefined : mat.hatch;
