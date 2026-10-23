@@ -319,3 +319,23 @@ test('help, command palette and project settings dialogs', async ({ page }) => {
   await expect(page).toHaveTitle(/• My Villa — Crafting/);
   expect(errors).toEqual([]);
 });
+
+test.describe('narrow window', () => {
+  test.use({ viewport: { width: 720, height: 820 } });
+  test('sidebars float over the views and nothing overflows', async ({ page }) => {
+    const errors = await boot(page);
+    await dismissWelcome(page);
+    await expect(page.locator('.cr-sidebar.is-left')).toBeHidden();
+    await expect(page.locator('.cr-dock .cr-hotbar')).toBeVisible();
+    const hb = (await page.locator('.cr-dock .cr-hotbar').boundingBox())!;
+    expect(hb.x).toBeGreaterThanOrEqual(0);
+    expect(hb.x + hb.width).toBeLessThanOrEqual(720);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(720);
+    await page.locator('.cr-toolbar [aria-label="Levels"]').click();
+    await expect(page.locator('.cr-sidebar.is-left')).toBeVisible();
+    await page.screenshot({ path: 'test-results/ui-narrow.png', animations: 'disabled' });
+    await page.locator('.cr-scrim').click({ position: { x: 680, y: 300 } });
+    await expect(page.locator('.cr-sidebar.is-left')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+});

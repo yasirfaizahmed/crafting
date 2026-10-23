@@ -1234,7 +1234,7 @@ body { font: 400 13px/1.4 var(--cr-font); -webkit-font-smoothing: antialiased; f
   .cr-sidebar.is-right { right: 0; }
   .cr-app.has-left .cr-scrim, .cr-app.has-right .cr-scrim { display: block; position: absolute; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.45); }
   .cr-brand-name, .cr-dock-side.is-left { display: none; }
-  .cr-dock { grid-template-columns: 0 auto 1fr; gap: 6px; padding: 0 6px; }
+  .cr-dock { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 0 6px; height: 60px; }
   .cr-slot { width: 38px; height: 38px; }
   .cr-tile { width: 28px; height: 28px; }
   .cr-tile-ic { font-size: 17px; }
@@ -1244,6 +1244,15 @@ body { font: 400 13px/1.4 var(--cr-font); -webkit-font-smoothing: antialiased; f
   .cr-inv-tabs { width: 52px; }
   .cr-inv-tab-label, .cr-inv-tab-count, .cr-inv-hints { display: none; }
   .cr-status-item:not(.cr-status-btn) { display: none; }
+}
+@media (max-width: 480px) {
+  .cr-slot { width: 31px; height: 31px; }
+  .cr-tile { width: 24px; height: 24px; }
+  .cr-tile-ic { font-size: 14px; }
+  .cr-slot-num { display: none; }
+  .cr-dock-inv { height: 36px; padding: 0 8px; }
+  .cr-dock-inv kbd { display: none; }
+  .cr-seg-btn { padding: 0 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cr-app *, .cr-modal-backdrop, .cr-modal, .cr-toast { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
