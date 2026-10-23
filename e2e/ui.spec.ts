@@ -38,6 +38,9 @@ test('shell layout: menus, toolbar, sidebars, both views, hotbar and status bar'
   await expect(page.locator('.cr-v3d-host')).toBeVisible();
   await expect(page.locator('.cr-levels-panel')).toBeVisible();
   await expect(page.locator('.cr-outliner-panel')).toBeVisible();
+  // At 1440 px the inspector starts collapsed so the split views keep their room.
+  await expect(page.locator('.cr-props')).toBeHidden();
+  await page.locator('.cr-toolbar [aria-label="Properties"]').click();
   await expect(page.locator('.cr-props')).toBeVisible();
   await expect(page.locator('.cr-dock .cr-slot')).toHaveCount(9);
   await expect(page.locator('.cr-statusbar')).toContainText('Ground Floor');
@@ -184,6 +187,9 @@ test('properties: edit a wall thickness with unit strings, then undo with Ctrl+Z
   });
   const thickness = () => page.evaluate((id) => (window as any).crafting.store.getElement(id).thickness, wallId);
   const t0 = await thickness();
+  // The collapsed inspector shows a selection badge; the status bar opens it.
+  await expect(page.locator('.cr-toolbar .cr-panel-toggle.has-badge')).toBeVisible();
+  await page.locator('.cr-statusbar button', { hasText: '1 selected' }).click();
   await expect(page.locator('.cr-props-title')).toBeVisible();
   await expect(page.locator('.cr-props-sub')).toContainText('Wall');
   const input = page.locator('.cr-props [data-field="thickness"] input');
@@ -312,4 +318,24 @@ test('help, command palette and project settings dialogs', async ({ page }) => {
   await expect(proj).toHaveCount(0);
   await expect(page).toHaveTitle(/• My Villa — Crafting/);
   expect(errors).toEqual([]);
+});
+
+test.describe('narrow window', () => {
+  test.use({ viewport: { width: 720, height: 820 } });
+  test('sidebars float over the views and nothing overflows', async ({ page }) => {
+    const errors = await boot(page);
+    await dismissWelcome(page);
+    await expect(page.locator('.cr-sidebar.is-left')).toBeHidden();
+    await expect(page.locator('.cr-dock .cr-hotbar')).toBeVisible();
+    const hb = (await page.locator('.cr-dock .cr-hotbar').boundingBox())!;
+    expect(hb.x).toBeGreaterThanOrEqual(0);
+    expect(hb.x + hb.width).toBeLessThanOrEqual(720);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(720);
+    await page.locator('.cr-toolbar [aria-label="Levels"]').click();
+    await expect(page.locator('.cr-sidebar.is-left')).toBeVisible();
+    await page.screenshot({ path: 'test-results/ui-narrow.png', animations: 'disabled' });
+    await page.locator('.cr-scrim').click({ position: { x: 680, y: 300 } });
+    await expect(page.locator('.cr-sidebar.is-left')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
 });

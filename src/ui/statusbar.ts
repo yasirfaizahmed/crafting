@@ -55,13 +55,14 @@ export function mountStatusbar(container: HTMLElement, shell: Shell): { update()
   const hint = h('span', { class: 'cr-status-hint', 'aria-live': 'polite' });
   const hand = h('span', { class: 'cr-status-item cr-status-hand', title: 'Item in hand' });
   const level = h('button', { class: 'cr-status-item cr-status-btn', type: 'button', title: 'Active level (PgUp / PgDn)' });
-  const sel = h('span', { class: 'cr-status-item', title: 'Selection' });
+  const sel = h('button', { class: 'cr-status-item cr-status-btn', type: 'button', title: 'Selection — show its properties' });
   const snap = h('button', { class: 'cr-status-item cr-status-btn', type: 'button', title: 'Snapping (G toggles grid snap)' });
   const unitsEl = h('button', { class: 'cr-status-item cr-status-btn', type: 'button', title: 'Display units' });
   const save = h('span', { class: 'cr-status-item cr-status-save', title: 'Save state' });
   const bar = h('div', { class: 'cr-status-inner' }, hint, h('span', { class: 'cr-flex' }), hand, level, sel, snap, unitsEl, save);
   container.appendChild(bar);
   level.addEventListener('click', () => shell.openDialog('levels'));
+  sel.addEventListener('click', () => shell.showTab('properties'));
   snap.addEventListener('click', () => ui.set({ snapGrid: !ui.get().snapGrid }));
   unitsEl.addEventListener('click', () => void shell.ctx.commands.run('view.units'));
 

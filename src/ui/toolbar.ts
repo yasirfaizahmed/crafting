@@ -104,6 +104,10 @@ export function mountToolbar(container: HTMLElement, shell: Shell): { update(): 
     rightToggle.setAttribute('aria-pressed', String(shell.isSidebarOpen('right')));
     leftToggle.classList.toggle('is-on', shell.isSidebarOpen('left'));
     rightToggle.classList.toggle('is-on', shell.isSidebarOpen('right'));
+    // A closed inspector hints that the selection has properties to edit.
+    const n = ctx.selection.get().length;
+    rightToggle.classList.toggle('has-badge', !shell.isSidebarOpen('right') && n > 0);
+    rightToggle.dataset.badge = n > 99 ? '99+' : String(n);
   });
 
   const inventoryBtn = action('chest', 'Inventory', withKey('Creative inventory', 'inventory.toggle'), () => ui.set({ inventoryOpen: !ui.get().inventoryOpen }), 'cr-inventory-btn');
@@ -179,7 +183,7 @@ export function mountToolbar(container: HTMLElement, shell: Shell): { update(): 
     updateHistory();
   };
   update();
-  const unsubs = [ui.subscribe(update), store.subscribe(updateHistory)];
+  const unsubs = [ui.subscribe(update), store.subscribe(updateHistory), ctx.selection.subscribe(update)];
   return {
     update,
     dispose() {
