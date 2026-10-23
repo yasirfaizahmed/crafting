@@ -273,6 +273,9 @@ test('fly mode: keyboard movement, hotbar wheel, walking toggle', async ({ page 
 });
 
 test('visual tour: x-ray, cut-away, fly mode and image capture', async ({ page }) => {
+  // Seven camera moves + screenshots + two captures of the fully detailed house: too much for the
+  // default 60 s budget under software (SwiftShader) rendering.
+  test.setTimeout(180_000);
   const errors = await boot(page);
   await page.evaluate(() => (window as any).crafting.ui.set({ xray: true }));
   await shot(page, 'view3d-xray');
