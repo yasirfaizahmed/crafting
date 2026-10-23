@@ -177,6 +177,11 @@ export class Environment {
       map: grass.map,
       roughness: 0.96,
       metalness: 0,
+      // Push the grass back in depth so ground-floor slabs (top at ±0) never z-fight with it at a
+      // distance, where depth precision is coarse.
+      polygonOffset: true,
+      polygonOffsetFactor: 4,
+      polygonOffsetUnits: 16,
     });
     const variation = drawVariation(7);
     if (variation) {
@@ -203,7 +208,7 @@ export class Environment {
     }
     this.ground = new THREE.Mesh(groundGeo, groundMat);
     this.ground.name = 'ground';
-    this.ground.position.y = -0.012;
+    this.ground.position.y = -0.02;
     this.ground.receiveShadow = true;
     this.ground.raycast = () => {};
     this.group.add(this.ground);
