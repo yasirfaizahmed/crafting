@@ -265,6 +265,67 @@ test('export dialog: formats grouped by kind, options, download and friendly err
   expect(errors).toEqual([]);
 });
 
+/** A tiny R12-style DXF: a 6 × 4 m rectangle of lines on layer A-WALL, in millimetres. */
+function rectangleDXF(): string {
+  const pts = [
+    [0, 0],
+    [6000, 0],
+    [6000, 4000],
+    [0, 4000],
+  ];
+  const out = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '4', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES'];
+  pts.forEach((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    out.push('0', 'LINE', '8', 'A-WALL', '10', String(p[0]), '20', String(p[1]), '30', '0', '11', String(q[0]), '21', String(q[1]), '31', '0');
+  });
+  out.push('0', 'LINE', '8', 'A-ANNO', '10', '0', '20', '-500', '30', '0', '11', '6000', '21', '-500', '31', '0');
+  out.push('0', 'ENDSEC', '0', 'EOF');
+  return out.join('\n');
+}
+
+test('import a DXF blueprint and export IFC through the real io / export modules', async ({ page }) => {
+  const errors = await boot(page);
+  await dismissWelcome(page);
+  const levelId = await page.evaluate(() => {
+    const c = (window as any).crafting;
+    c.ui.set({ activeLevelId: c.store.project.levels[1].id });
+    return c.store.project.levels[1].id as string;
+  });
+  const walls = () => page.evaluate((id) => (window as any).crafting.store.elements.filter((e: any) => e.type === 'wall' && e.levelId === id).length, levelId);
+  const before = await walls();
+  await page.evaluate(() => (window as any).crafting.commands.run('file.importDXF'));
+  const dlg = page.locator('.cr-dxf-modal');
+  await expect(dlg).toBeVisible();
+  const chooser = page.waitForEvent('filechooser');
+  await dlg.locator('.cr-dropzone').click();
+  await (await chooser).setFiles({ name: 'house.dxf', mimeType: 'image/vnd.dxf', buffer: Buffer.from(rectangleDXF()) });
+  await expect(dlg.locator('.cr-dxf-file')).toContainText('house.dxf');
+  await expect(dlg.locator('.cr-check-list .cr-check')).toHaveCount(2);
+  await expect(dlg.locator('.cr-check-list input[value="A-WALL"]')).toBeChecked();
+  await expect(dlg.locator('.cr-check-list input[value="A-ANNO"]')).not.toBeChecked();
+  await page.screenshot({ path: 'test-results/ui-dxf-import.png', animations: 'disabled' });
+  await dlg.locator('.cr-modal-footer .cr-btn.is-primary').click();
+  await expect(dlg).toHaveCount(0);
+  expect(await walls()).toBe(before + 4);
+  await expect(page.locator('.cr-toast.is-success')).toContainText('house.dxf');
+  // One undo step removes the whole import.
+  await focusBody(page);
+  await page.keyboard.press('Control+z');
+  expect(await walls()).toBe(before);
+
+  await page.keyboard.press('Control+Shift+E');
+  const exp = page.locator('.cr-export-modal');
+  await exp.locator('[data-format="ifc"]').click();
+  const download = page.waitForEvent('download');
+  await exp.locator('.cr-modal-footer .cr-btn.is-primary').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('Sample-House.ifc');
+  const text = await (await file.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8'));
+  expect(text).toContain('ISO-10303-21');
+  expect(text).toContain('IFCWALL');
+  expect(errors).toEqual([]);
+});
+
 test('welcome screen: start a 2D blueprint', async ({ page }) => {
   const errors = await boot(page, '/?welcome=1');
   const welcome = page.locator('.cr-welcome-modal');

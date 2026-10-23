@@ -4,7 +4,8 @@
  */
 import type { Element } from '../../core/types';
 import { parseLength } from '../../core/units';
-import { importDXF, listDXFLayers, pickTextFile, type DXFImportOptions, type DXFLayerInfo } from '../../io';
+import { importDXF, inspectDXF, pickTextFile, type DXFImportOptions, type DXFLayerInfo } from '../../io';
+import { formatLength } from '../../core/units';
 import { errorMessage } from '../actions';
 import { h } from '../dom';
 import { displayLength, pluralize } from '../format';
@@ -85,8 +86,16 @@ export function openDXFImportDialog(shell: Shell): ModalHandle {
   const load = (f: { name: string; text: string }) => {
     showError(null);
     file = f;
+    let size = '';
     try {
-      layers = listDXFLayers(f.text);
+      const info = inspectDXF(f.text);
+      layers = info.layers;
+      const label = DXF_UNITS.find((u) => u.scale !== undefined && Math.abs(u.scale - info.units.unitScale) < 1e-9)?.label ?? `${info.units.unitScale} mm per unit`;
+      unitSel.options[0].textContent = `Detected — ${label}${info.units.source === 'header' ? '' : ' (guessed)'}`;
+      if (info.extents) {
+        const k = info.units.unitScale;
+        size = ` · ${formatLength((info.extents.maxX - info.extents.minX) * k, units)} × ${formatLength((info.extents.maxY - info.extents.minY) * k, units)}`;
+      }
     } catch (e) {
       layers = [];
       showError(`Could not read “${f.name}”: ${errorMessage(e)}`);
@@ -94,7 +103,7 @@ export function openDXFImportDialog(shell: Shell): ModalHandle {
     fileInfo.hidden = false;
     fileInfo.textContent = '';
     const total = layers.reduce((a, l) => a + l.entityCount, 0);
-    fileInfo.append(icon('fileText'), h('strong', null, f.name), h('span', null, layers.length ? `${pluralize(layers.length, 'layer')} · ${pluralize(total, 'entity', 'entities')}` : 'no layers found'));
+    fileInfo.append(icon('fileText'), h('strong', null, f.name), h('span', null, layers.length ? `${pluralize(layers.length, 'layer')} · ${pluralize(total, 'entity', 'entities')}${size}` : 'no layers found'));
     drop.classList.add('is-compact');
     layerList.textContent = '';
     const picked = new Set(defaultDXFLayers(layers));
