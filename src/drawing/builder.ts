@@ -70,7 +70,9 @@ export class DrawingBuilder {
 
   /** Entities on the named layers only (in the given order). */
   only(names: string[]): DrawingEntity[] {
-    return names.flatMap((n) => this.buckets.get(n) ?? []);
+    const out: DrawingEntity[] = [];
+    for (const n of names) for (const e of this.buckets.get(n) ?? []) out.push(e);
+    return out;
   }
 
   /** Entities of one layer so far. */
@@ -82,11 +84,14 @@ export class DrawingBuilder {
   entities(layers: DrawingLayer[]): DrawingEntity[] {
     const out: DrawingEntity[] = [];
     const done = new Set<string>();
+    const append = (list: DrawingEntity[] | undefined) => {
+      if (list) for (const e of list) out.push(e);
+    };
     for (const l of layers) {
-      out.push(...(this.buckets.get(l.name) ?? []));
+      append(this.buckets.get(l.name));
       done.add(l.name);
     }
-    for (const [name, list] of this.buckets) if (!done.has(name)) out.push(...list);
+    for (const [name, list] of this.buckets) if (!done.has(name)) append(list);
     return out;
   }
 

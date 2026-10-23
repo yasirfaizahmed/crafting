@@ -605,10 +605,10 @@ export function drawingsToDXF(drawings: Drawing[]): string {
   const en = new Out();
   en.str(0, 'SECTION');
   en.str(2, 'ENTITIES');
-  en.lines.push(...ent.lines);
+  for (const l of ent.lines) en.lines.push(l);
   en.str(0, 'ENDSEC');
 
-  return [...hd.lines, ...cl.lines, ...tb.lines, ...bl.lines, ...en.lines, ...ob.lines, '  0', 'EOF', ''].join('\r\n');
+  return hd.lines.concat(cl.lines, tb.lines, bl.lines, en.lines, ob.lines, ['  0', 'EOF', '']).join('\r\n');
 }
 
 function writeEntity(o: Out, e: DrawingEntity, d: Drawing, layer: DrawingLayer, T: (p: Vec2) => Vec2, H: () => string, owner: string): void {

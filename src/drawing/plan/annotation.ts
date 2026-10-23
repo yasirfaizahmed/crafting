@@ -69,7 +69,8 @@ function tagPosition(ctx: PlanContext, outline: Vec2[], w: number, h: number): V
   };
   if (cost(c0) === 0) return c0;
   const bb = boundsOf(outline);
-  const step = Math.max(25, mm(ctx, 0.5));
+  for (const [k, box] of boxes) if (box.minX > bb.maxX || box.maxX < bb.minX || box.minY > bb.maxY || box.maxY < bb.minY) boxes.delete(k);
+  const step = Math.max(25, mm(ctx, 0.5), Math.max(bb.maxX - bb.minX, bb.maxY - bb.minY) / 120);
   const nx = Math.min(200, Math.ceil((bb.maxX - bb.minX) / step));
   const ny = Math.min(200, Math.ceil((bb.maxY - bb.minY) / step));
   let best = c0;
@@ -300,11 +301,10 @@ export function drawExteriorChains(ctx: PlanContext, extent: Bounds2): Dimension
     segs.forEach((g, i) => {
       if (g.fits) return;
       const gap = mm(ctx, 1.6);
-      const cands = [
-        { t: g.t1 + gap + g.w / 2, row: 0 },
-        { t: g.t0 - gap - g.w / 2, row: 0 },
-        { t: (g.t0 + g.t1) / 2, row: 1 },
-      ];
+      const after = { t: g.t1 + gap + g.w / 2, row: 0 };
+      const before = { t: g.t0 - gap - g.w / 2, row: 0 };
+      // The first segment's text goes outside the chain's start, the others after their end.
+      const cands = [...(i === 0 ? [before, after] : [after, before]), { t: (g.t0 + g.t1) / 2, row: 1 }];
       const pick = cands.find((c) => free(c.row, c.t - g.w / 2, c.t + g.w / 2)) ?? cands[2];
       rows[pick.row].push([pick.t - g.w / 2, pick.t + g.w / 2]);
       pos[i] = pick;
