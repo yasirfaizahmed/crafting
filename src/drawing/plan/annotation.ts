@@ -92,6 +92,36 @@ function tagPosition(ctx: PlanContext, outline: Vec2[], w: number, h: number): V
   return best;
 }
 
+/** Door (circle) and window (hexagon) tags carrying the schedule marks. */
+export function drawOpeningTags(ctx: PlanContext, marks: Map<string, string>): void {
+  const { b } = ctx;
+  for (const op of ctx.elements) {
+    if (op.type !== 'door' && op.type !== 'window') continue;
+    const mark = marks.get(op.id);
+    const host = ctx.project.elements[op.hostId];
+    if (!mark || !host || host.type !== 'wall') continue;
+    const fr = openingFrame(host, op);
+    const ext = exteriorSide(ctx, fr);
+    const s = (fr.a + fr.b) / 2;
+    let side: number;
+    if (op.type === 'window') side = ext === 0 ? 1 : ext;
+    else if (op.style === 'single' || op.style === 'double') side = op.flip ? 1 : -1; // opposite the swing
+    else side = ext === 0 ? 1 : -ext;
+    const face = side > 0 ? fr.left : fr.right;
+    const r = mm(ctx, 2.9);
+    const c = fr.at(s, face + side * (r + mm(ctx, 1.2)));
+    const id = { elementId: op.id };
+    if (op.type === 'door') b.circle('A-DOOR-IDEN', c, r, { ...id, tag: 'door-tag' });
+    else {
+      const w = mm(ctx, 3.8);
+      const h = mm(ctx, 2.2);
+      const k = mm(ctx, 1.2);
+      b.polyline('A-GLAZ-IDEN', [{ x: c.x - w, y: c.y }, { x: c.x - w + k, y: c.y - h }, { x: c.x + w - k, y: c.y - h }, { x: c.x + w, y: c.y }, { x: c.x + w - k, y: c.y + h }, { x: c.x - w + k, y: c.y + h }], true, { ...id, tag: 'window-tag' });
+    }
+    b.text(op.type === 'door' ? 'A-DOOR-IDEN' : 'A-GLAZ-IDEN', c, mark, TEXT.tiny, { ...id, tag: 'mark', bold: true });
+  }
+}
+
 export function drawLabel(ctx: PlanContext, l: Label): void {
   ctx.b.text('A-ANNO-TEXT', l.position, l.text, l.size, { elementId: l.id, rotation: l.rotation, tag: 'label' });
 }

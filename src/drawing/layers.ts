@@ -71,6 +71,8 @@ export const PLAN_LAYERS: DrawingLayer[] = [
   L('S-BEAM', '#303030', PEN.thin, 'hidden', 'Structural beams (above, hidden)', 1),
   L('A-ROOF', '#303030', PEN.thin, 'dashed', 'Roof outline and overhang (above)', 5),
   L('A-AREA-IDEN', '#000000', PEN.thin, 'continuous', 'Room tags: name, number, area', 2),
+  L('A-DOOR-IDEN', '#000000', PEN.fine, 'continuous', 'Door tags (schedule marks)', 3),
+  L('A-GLAZ-IDEN', '#000000', PEN.fine, 'continuous', 'Window tags (schedule marks)', 4),
   L('A-ANNO-DIMS', '#000000', PEN.fine, 'continuous', 'Dimensions', 1),
   L('A-ANNO-TEXT', '#000000', PEN.thin, 'continuous', 'Text and labels', 7),
   L('A-ANNO-SYMB', '#000000', PEN.thin, 'continuous', 'Symbols: north arrow, scale bar, titles', 7),
