@@ -8,6 +8,7 @@ const PATHS = {
   split: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 4v16"/>',
   cube: '<path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>',
   fly: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
+  walk: '<circle cx="13" cy="4" r="2"/><path d="m9 21 2.5-6 2.5 2v4"/><path d="M8 11.5 10.5 8l3 1.5 2 3 2.5 1"/><path d="m11.5 15 1-6.5"/>',
   orbit: '<ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-20 12 12)"/><circle cx="12" cy="12" r="3"/>',
   grid: '<rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
   magnet:

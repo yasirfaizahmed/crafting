@@ -111,8 +111,35 @@ describe('walker physics', () => {
       s = walkStep(s, { dx: 0, dz: 0 }, 1 / 60, probe);
       peak = Math.max(peak, s.y);
     }
-    expect(peak).toBeGreaterThan(0.8);
+    expect(peak).toBeGreaterThan(1.15); // about Minecraft's 1.25 m jump: clears a 1 m block
+    expect(peak).toBeLessThan(1.35);
     expect(s.y).toBe(0);
     expect(s.onGround).toBe(true);
+  });
+
+  it('sneaking never steps off a ledge, walking does', () => {
+    // A 3 m high platform ending at z = −2 (walking towards +z walks off it).
+    const platform: Box = { min: [-5, 0, -10], max: [5, 3, -2] };
+    const probe = probeFor([platform]);
+    const start: WalkState = { x: 0, y: 3, z: -4, vy: 0, onGround: true };
+    let s = start;
+    for (let i = 0; i < 120; i++) s = walkStep(s, { dx: 0, dz: 2 / 60 }, 1 / 60, probe, false, true);
+    expect(s.y).toBe(3);
+    expect(s.onGround).toBe(true);
+    expect(s.z).toBeLessThanOrEqual(-2);
+    expect(s.z).toBeGreaterThan(-2.2); // shuffled right up to the edge
+    // Sneaking along the edge still works.
+    const along = walkStep(s, { dx: 0.05, dz: 0 }, 1 / 60, probe, false, true);
+    expect(along.x).toBeGreaterThan(s.x);
+    const fell = walk(start, probe, 0, 2, 3);
+    expect(fell.y).toBe(0);
+  });
+
+  it('sneaking still steps down a stair riser', () => {
+    const step: Box = { min: [-5, 0, -10], max: [5, 0.18, -2] };
+    let s: WalkState = { x: 0, y: 0.18, z: -3, vy: 0, onGround: true };
+    for (let i = 0; i < 120; i++) s = walkStep(s, { dx: 0, dz: 2 / 60 }, 1 / 60, probeFor([step]), false, true);
+    expect(s.z).toBeGreaterThan(-1);
+    expect(s.y).toBe(0);
   });
 });

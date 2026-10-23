@@ -92,17 +92,7 @@ export function handlesFor(el: Element, ctx: HandleContext): Handle[] {
     case 'block':
       return [...sizeHandles(el, ctx), ...rotateHandle(el, ctx)];
     case 'label':
-    case 'block': {
-      const rr = rotateRadius(el);
-      if (!rr) return [];
-      let center = rr.center;
-      if (el.type === 'block') {
-        const o = blockOutline(el);
-        center = scale(add(o[0], o[2]), 0.5);
-      }
-      const dir = dirFromDeg(rotation(el) + 90);
-      return [H(el, 'rotate', add(center, scale(dir, rr.r + ctx.px(26))), 'circle', 0, 'grab')];
-    }
+      return rotateHandle(el, ctx);
     default:
       return [];
   }

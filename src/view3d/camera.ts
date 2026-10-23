@@ -2,8 +2,10 @@
  * Camera modes for the 3D builder:
  *  - ORBIT: OrbitControls with RIGHT-drag orbit, MIDDLE-drag (or Shift+RIGHT) pan, wheel zoom.
  *    LMB stays free for clicks. WASD glides the orbit target.
- *  - FLY: first person (pointer lock driven by the viewport). WASD move, Space up, Shift down,
- *    Ctrl sprint; double-tap Space toggles flying ⇄ walking (gravity + collision, see walker.ts).
+ *  - WALK / FLY: first person (pointer lock driven by the viewport), like Minecraft creative.
+ *    Walk: WASD, Space jump, Shift sneak (slower, lower, never steps off an edge), Ctrl or
+ *    double-tap W sprint (wider field of view), view bobbing and footstep callbacks.
+ *    Fly: WASD, Space up, Shift down, Ctrl sprint. Double-tap Space switches walk ⇄ fly.
  * Includes eased camera transitions (frame / reset / top view).
  */
 import * as THREE from 'three';
@@ -11,12 +13,18 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { M_TO_MM } from '../core/coords';
 import type { CameraMode } from '../app/state';
 import type { PlayerView } from './tools/types';
-import { EYE_HEIGHT, walkStep, type WalkProbe, type WalkState } from './walker';
+import { EYE_HEIGHT, SNEAK_EYE_HEIGHT, walkStep, type WalkProbe, type WalkState } from './walker';
 
 export const FLY_SPEED = 7;
 export const FLY_SPRINT = 18;
 export const WALK_SPEED = 4.3;
 export const WALK_SPRINT = 6.8;
+export const SNEAK_SPEED = 1.3;
+export const BASE_FOV = 60;
+/** Field of view multiplier while sprinting (Minecraft-style speed feel). */
+export const SPRINT_FOV = 1.12;
+/** Walking distance per footstep, m. */
+export const STRIDE = 0.75;
 export const LOOK_SENSITIVITY = 0.0023;
 export const DOUBLE_TAP_MS = 300;
 
@@ -41,8 +49,6 @@ export class CameraController {
   readonly camera: THREE.PerspectiveCamera;
   readonly orbit: OrbitControls;
   mode: CameraMode = 'orbit';
-  /** Fly sub-mode: true = flying, false = walking with gravity. */
-  flying = true;
   private yaw = 0;
   private pitch = 0;
   private readonly vel = new THREE.Vector3();
@@ -50,13 +56,33 @@ export class CameraController {
   private readonly keys = new Set<string>();
   private tween: Tween | null = null;
   private lastSpace = -Infinity;
+  private lastW = -Infinity;
   private jumpQueued = false;
+  /** Sprint latched by double-tapping W (until W is released). */
+  private sprintLatch = false;
+  private eye = EYE_HEIGHT;
+  private bobPhase = 0;
+  private bobAmount = 0;
   // Scratch objects (no per-frame allocations).
   private readonly v1 = new THREE.Vector3();
   private readonly v2 = new THREE.Vector3();
   private readonly v3 = new THREE.Vector3();
   /** Called when walking/flying toggles. */
   onFlyingChange?: (flying: boolean) => void;
+  /** Called on every footstep while walking. */
+  onFootstep?: () => void;
+  /** Called when the walker lands after a fall, with the impact speed (m/s). */
+  onLand?: (speed: number) => void;
+
+  /** First person (walk or fly) rather than orbit. */
+  get firstPerson(): boolean {
+    return this.mode !== 'orbit';
+  }
+
+  /** Flying (first person without gravity). */
+  get flying(): boolean {
+    return this.mode === 'fly';
+  }
 
   constructor(
     dom: HTMLElement,
@@ -87,14 +113,18 @@ export class CameraController {
   setMode(mode: CameraMode): void {
     if (mode === this.mode) return;
     this.tween = null;
-    if (mode === 'fly') {
-      const dir = this.camera.getWorldDirection(this.v1);
-      this.yaw = Math.atan2(-dir.x, -dir.z);
-      this.pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
-      this.orbit.enabled = false;
-      this.vel.set(0, 0, 0);
-      this.applyLook();
-      if (!this.flying) this.startWalking();
+    if (mode !== 'orbit') {
+      if (this.mode === 'orbit') {
+        const dir = this.camera.getWorldDirection(this.v1);
+        this.yaw = Math.atan2(-dir.x, -dir.z);
+        this.pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
+        this.orbit.enabled = false;
+        this.vel.set(0, 0, 0);
+        this.applyLook();
+      }
+      this.mode = mode;
+      if (mode === 'walk') this.startWalking();
+      else this.walk = null;
     } else {
       const dir = this.camera.getWorldDirection(this.v1);
       const dist = THREE.MathUtils.clamp(this.host.centerDistance?.() ?? 10, 1.5, 60);
@@ -107,16 +137,18 @@ export class CameraController {
     this.keys.clear();
   }
 
-  /** Toggle flying ⇄ walking (fly mode only). */
+  /** Toggle flying ⇄ walking (first person only). */
   toggleFlying(): void {
-    this.flying = !this.flying;
-    if (this.flying) this.walk = null;
-    else this.startWalking();
+    if (!this.firstPerson) return;
+    this.mode = this.mode === 'fly' ? 'walk' : 'fly';
+    if (this.mode === 'walk') this.startWalking();
+    else this.walk = null;
     this.onFlyingChange?.(this.flying);
   }
 
   private startWalking(): void {
     const p = this.camera.position;
+    this.eye = EYE_HEIGHT;
     this.walk = { x: p.x, y: p.y - EYE_HEIGHT, z: p.z, vy: 0, onGround: false };
   }
 
@@ -124,7 +156,7 @@ export class CameraController {
   keyDown(code: string, repeat = false, time = performance.now()): boolean {
     const movement = MOVE_CODES.has(code);
     if (!movement) return false;
-    if (this.mode === 'fly' && code === 'Space' && !repeat) {
+    if (this.firstPerson && code === 'Space' && !repeat) {
       // Event timestamps keep double-taps reliable even when frames are slow.
       const now = time;
       if (now - this.lastSpace < DOUBLE_TAP_MS) {
@@ -135,12 +167,17 @@ export class CameraController {
         if (!this.flying) this.jumpQueued = true;
       }
     }
+    if (this.firstPerson && code === 'KeyW' && !repeat) {
+      if (time - this.lastW < DOUBLE_TAP_MS) this.sprintLatch = true;
+      this.lastW = time;
+    }
     this.keys.add(code);
-    return this.mode === 'fly' || ORBIT_CODES.has(code);
+    return this.firstPerson || ORBIT_CODES.has(code);
   }
 
   keyUp(code: string): void {
     this.keys.delete(code);
+    if (code === 'KeyW') this.sprintLatch = false;
   }
 
   releaseKeys(): void {
@@ -154,7 +191,8 @@ export class CameraController {
       for (const c of ORBIT_CODES) if (this.keys.has(c)) return true;
       return false;
     }
-    return this.keys.size > 0 || this.vel.lengthSq() > 1e-6 || (!!this.walk && !this.walk.onGround);
+    const settling = Math.abs(this.camera.fov - BASE_FOV) > 0.05 || this.bobAmount > 0.01 || (!!this.walk && Math.abs(this.eye - EYE_HEIGHT) > 0.002);
+    return this.keys.size > 0 || this.vel.lengthSq() > 1e-6 || (!!this.walk && !this.walk.onGround) || settling;
   }
 
   /**
@@ -171,7 +209,7 @@ export class CameraController {
 
   /** Mouse look in fly mode (pixel deltas). */
   look(dx: number, dy: number): void {
-    if (this.mode !== 'fly') return;
+    if (!this.firstPerson) return;
     this.yaw -= dx * LOOK_SENSITIVITY;
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * LOOK_SENSITIVITY, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01);
     this.applyLook();
@@ -210,9 +248,10 @@ export class CameraController {
   }
 
   private updateFly(dt: number): boolean {
-    const sprint = this.has('ControlLeft', 'ControlRight');
+    const sprint = this.sprintLatch || this.has('ControlLeft', 'ControlRight');
     const wish = this.inputVector(this.v1);
     const before = this.v3.copy(this.camera.position);
+    const fovBefore = this.camera.fov;
     if (this.flying || !this.walk) {
       const speed = sprint ? FLY_SPRINT : FLY_SPEED;
       const up = (this.has('Space') ? 1 : 0) - (this.has('ShiftLeft', 'ShiftRight') ? 1 : 0);
@@ -223,17 +262,39 @@ export class CameraController {
       this.camera.position.addScaledVector(this.vel, dt);
       if (this.camera.position.y < 0.3) this.camera.position.y = 0.3;
     } else {
-      const speed = sprint ? WALK_SPRINT : WALK_SPEED;
+      const sneak = this.has('ShiftLeft', 'ShiftRight');
+      const speed = sneak ? SNEAK_SPEED : sprint ? WALK_SPRINT : WALK_SPEED;
       wish.multiplyScalar(speed);
       wish.y = 0;
       this.vel.lerp(wish, 1 - Math.exp(-dt * 14));
       if (this.vel.lengthSq() < 1e-6 && !this.keys.size) this.vel.set(0, 0, 0);
-      this.walk = walkStep(this.walk, { dx: this.vel.x * dt, dz: this.vel.z * dt }, dt, this.host.probe, this.jumpQueued);
+      const wasGround = this.walk.onGround;
+      const vy = this.walk.vy;
+      this.walk = walkStep(this.walk, { dx: this.vel.x * dt, dz: this.vel.z * dt }, dt, this.host.probe, this.jumpQueued, sneak);
       this.jumpQueued = false;
-      this.camera.position.set(this.walk.x, this.walk.y + EYE_HEIGHT, this.walk.z);
+      if (!wasGround && this.walk.onGround && vy < -4) this.onLand?.(-vy);
+      // Sneaking lowers the eye; walking bobs the view and ticks footsteps.
+      this.eye += ((sneak ? SNEAK_EYE_HEIGHT : EYE_HEIGHT) - this.eye) * (1 - Math.exp(-dt * 12));
+      const hs = Math.hypot(this.vel.x, this.vel.z);
+      if (this.walk.onGround && hs > 0.3) {
+        const step = Math.floor(this.bobPhase / Math.PI);
+        this.bobPhase += (hs * dt * Math.PI) / STRIDE;
+        if (Math.floor(this.bobPhase / Math.PI) !== step) this.onFootstep?.();
+        this.bobAmount += (Math.min(1, hs / WALK_SPEED) - this.bobAmount) * (1 - Math.exp(-dt * 8));
+      } else this.bobAmount *= Math.exp(-dt * 8);
+      if (this.bobAmount < 0.005) this.bobAmount = 0;
+      const bobY = Math.abs(Math.sin(this.bobPhase)) * 0.045 * this.bobAmount;
+      const bobX = Math.cos(this.bobPhase) * 0.025 * this.bobAmount;
+      this.camera.position.set(this.walk.x + Math.cos(this.yaw) * bobX, this.walk.y + this.eye + bobY, this.walk.z - Math.sin(this.yaw) * bobX);
     }
+    // Sprinting widens the field of view a little.
+    const moving = this.vel.lengthSq() > 1;
+    const fov = BASE_FOV * (sprint && moving ? SPRINT_FOV : 1);
+    this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
+    if (Math.abs(this.camera.fov - fov) < 0.01) this.camera.fov = fov;
+    if (this.camera.fov !== fovBefore) this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    return before.distanceToSquared(this.camera.position) > 1e-10;
+    return before.distanceToSquared(this.camera.position) > 1e-10 || this.camera.fov !== fovBefore;
   }
 
   private glideOrbit(dt: number): boolean {

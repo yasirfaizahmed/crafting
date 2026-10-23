@@ -40,7 +40,7 @@ export function openWelcomeDialog(shell: Shell): ModalHandle {
     {
       id: 'world',
       title: 'Jump into the 3D World',
-      text: 'Fly around and build Minecraft-style: right-click places, left-click breaks.',
+      text: 'Walk or fly around and build Minecraft-style: right-click places, left-click breaks.',
       art: '🧱',
       tone: 'is-green',
       big: true,

@@ -3,7 +3,7 @@
 **Build like Minecraft. Design like a pro. Free.**
 
 Crafting is a free, browser-based architectural, structural and interior design tool. It plays like
-Minecraft in creative mode: there's a hotbar and a creative inventory, you can fly, right-click places,
+Minecraft in creative mode: there's a hotbar and a creative inventory, you can walk or fly, right-click places,
 left-click breaks, and resources are infinite. Underneath, it builds a real BIM model and exports
 industry-standard files.
 
@@ -17,7 +17,7 @@ industry-standard files.
    You can also trace a scanned blueprint image or import DXF linework. Then press **Generate 3D**:
    rooms, floor finishes, a foundation and a roof are created in one undoable step. **Add floor above**
    copies the exterior walls up a level.
-2. **Straight into 3D.** Fly around the world and build:
+2. **Straight into 3D.** Walk or fly around the world and build:
    - place walls, slabs, doors, windows, stairs, roofs, columns, beams, railings and furniture;
    - stack voxel blocks Minecraft-style;
    - one click inside a room fills its floor, and one click on a building roofs it;
@@ -39,7 +39,12 @@ Both views edit the same model, so every change appears in the other view instan
   - paint either side of a wall separately; working light fixtures.
 - **3D viewer:**
   - sky and sun with soft shadows, adjustable time of day;
-  - x-ray, a cut-away of the levels above, and a walk mode with gravity that climbs stairs.
+  - x-ray and a cut-away of the levels above;
+  - three cameras: Orbit, Fly and a Minecraft-style Walk: gravity, jumping, sneaking that never falls
+    off an edge, sprinting, stair climbing and view bobbing. Closed doors are solid: right-click to
+    open them, and right-click lights to switch them. Walking you reach about 6 m, holding a mouse
+    button keeps placing or breaking, and the item in hand swings. Synthesised sound effects can be
+    muted under View → Sound Effects.
 - **2D drafting:**
   - snapping to grid, wall ends, midpoints, perpendiculars, intersections, alignment guides and 15° angles;
   - selection handles that keep joined walls connected, box select, and nudging.
@@ -64,8 +69,8 @@ Both views edit the same model, so every change appears in the other view instan
 | --- | --- |
 | `1`–`9`, mouse wheel | Choose hotbar slot |
 | `E` | Creative inventory (click an item to put it in your hand) |
-| **3D:** RMB / LMB / MMB | Place / break / pick block |
-| **3D:** `F` | Toggle Fly (WASD, Space up, Shift down, double-tap Space = walk) and Orbit (right-drag orbit, middle-drag pan) |
+| **3D:** RMB / LMB / MMB | Place / break / pick block (hold to repeat); RMB on a door or light opens it / switches it, Shift+RMB places against it |
+| **3D:** `F` | Toggle Orbit (right-drag orbit, middle-drag pan) and first person: **Walk** (WASD, Space jump, Shift sneak, Ctrl or double-tap W sprint) or **Fly** (Space up, Shift down); double-tap Space switches walk ⇄ fly |
 | **3D:** `R`, `X`, `C` | Rotate the item in hand, x-ray, cut-away |
 | **Plan:** LMB / RMB / middle-drag | Draw or place / finish or cancel / pan |
 | `Tab` | Cycle Plan → Split → 3D |

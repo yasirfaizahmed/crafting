@@ -308,6 +308,8 @@ export interface Furniture extends ElementBase {
   height?: number;
   /** Mirror along the local x axis. */
   mirrored?: boolean;
+  /** Light fixtures: switched off when false (no light, unlit diffuser). Undefined = on. */
+  lightOn?: boolean;
 }
 
 export interface Room extends ElementBase {

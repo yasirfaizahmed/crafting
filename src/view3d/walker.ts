@@ -1,15 +1,19 @@
 /**
- * First-person walking physics (pure, renderer-agnostic): gravity, jumping, sliding collision
- * against obstacles and step-up onto surfaces up to STEP_UP high (so stairs can be climbed).
+ * First-person walking physics (pure, renderer-agnostic), tuned to feel like Minecraft: gravity,
+ * jumping about 1.25 m high, sliding collision against obstacles, step-up onto surfaces up to
+ * STEP_UP high (so stairs can be climbed) and sneaking that never walks off an edge.
  * World units: metres, Y up. `y` is the FEET height; the eye is EYE_HEIGHT above it.
  */
 
 export const EYE_HEIGHT = 1.62;
+/** Eye height while sneaking (Shift). */
+export const SNEAK_EYE_HEIGHT = 1.27;
 export const STEP_UP = 0.4;
 export const BODY_RADIUS = 0.3;
 export const BODY_HEIGHT = 1.8;
-export const GRAVITY = 24;
-export const JUMP_SPEED = 7.2;
+export const GRAVITY = 32;
+/** √(2 g h) for a ~1.25 m jump. */
+export const JUMP_SPEED = 8.9;
 export const MAX_FALL_SPEED = 50;
 
 export interface WalkProbe {
@@ -45,7 +49,7 @@ function freeDistance(s: WalkState, dx: number, dz: number, want: number, probe:
  * Advance the walker by one frame. `move` is the desired horizontal displacement (m) for this
  * frame; movement slides along obstacles axis by axis.
  */
-export function walkStep(s: WalkState, move: { dx: number; dz: number }, dt: number, probe: WalkProbe, jump = false): WalkState {
+export function walkStep(s: WalkState, move: { dx: number; dz: number }, dt: number, probe: WalkProbe, jump = false, sneak = false): WalkState {
   const next: WalkState = { ...s };
   // Horizontal: try X then Z so the body slides along walls.
   for (const axis of ['x', 'z'] as const) {
@@ -53,8 +57,15 @@ export function walkStep(s: WalkState, move: { dx: number; dz: number }, dt: num
     if (Math.abs(m) < 1e-9) continue;
     const dir = Math.sign(m);
     const free = freeDistance(next, axis === 'x' ? dir : 0, axis === 'z' ? dir : 0, Math.abs(m), probe);
-    if (axis === 'x') next.x += dir * free;
-    else next.z += dir * free;
+    const nx = axis === 'x' ? next.x + dir * free : next.x;
+    const nz = axis === 'z' ? next.z + dir * free : next.z;
+    // Sneaking on the ground never steps off an edge (a drop deeper than a step).
+    if (sneak && s.onGround) {
+      const g = probe.groundAt(nx, nz, next.y + STEP_UP);
+      if (g === null || g < next.y - STEP_UP) continue;
+    }
+    next.x = nx;
+    next.z = nz;
   }
   // Vertical.
   const ground = probe.groundAt(next.x, next.z, next.y + STEP_UP);

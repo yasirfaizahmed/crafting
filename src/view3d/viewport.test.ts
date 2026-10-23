@@ -8,9 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAppContext } from '../app/context';
 import { createSampleProject } from '../app/sample';
 import type { AppContext } from '../app/state';
-import type { Element } from '../core/types';
+import type { Door, Element, Furniture, Wall } from '../core/types';
+import { pointAtOffset } from '../core/walls';
 import type { ViewportHandle } from './types';
-import { Viewport, type ViewportDebug } from './viewport';
+import { interaction, REPEAT_DELAY_MS, REPEAT_EVERY_MS, Viewport, WALK_REACH, type ViewportDebug } from './viewport';
 
 const W = 800;
 const H = 600;
@@ -80,7 +81,27 @@ function mount(): Rig {
 afterEach(() => {
   for (const rig of rigs.splice(0)) rig.handle.dispose();
   document.body.innerHTML = '';
+  delete (document as unknown as { pointerLockElement?: unknown }).pointerLockElement;
+  vi.restoreAllMocks();
 });
+
+/** Pretend the browser granted pointer lock to the 3D canvas (first person). */
+function lock(rig: Rig): void {
+  Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => rig.r.domElement });
+  (document as unknown as { exitPointerLock: () => void }).exitPointerLock = () => {
+    delete (document as unknown as { pointerLockElement?: unknown }).pointerLockElement;
+    document.dispatchEvent(new Event('pointerlockchange'));
+  };
+  document.dispatchEvent(new Event('pointerlockchange'));
+}
+
+function press(rig: Rig, button: number, opts: MouseEventInit = {}): void {
+  rig.r.domElement.dispatchEvent(new MouseEvent('mousedown', { button, bubbles: true, ...opts }));
+}
+
+function release(button: number): void {
+  window.dispatchEvent(new MouseEvent('mouseup', { button, bubbles: true }));
+}
 
 function hold(ctx: AppContext, id: string): void {
   const hotbar = [...ctx.ui.get().hotbar];
@@ -174,9 +195,11 @@ describe('viewport input pipeline (jsdom, stand-in renderer)', () => {
     expect(cmd.when!()).toBe(false);
     rig.container.focus();
     expect(cmd.when!()).toBe(true);
+    // F toggles orbit ⇄ first person, walking by default.
     key('f');
-    expect(rig.ctx.ui.get().cameraMode).toBe('fly');
-    expect(rig.debug.stats().mode).toBe('fly');
+    expect(rig.ctx.ui.get().cameraMode).toBe('walk');
+    expect(rig.debug.stats().mode).toBe('walk');
+    expect(rig.debug.stats().flying).toBe(false);
     // Unrelated keys bubble to the global keymap.
     const one = key('1');
     expect(one.defaultPrevented).toBe(false);
@@ -239,5 +262,104 @@ describe('viewport input pipeline (jsdom, stand-in renderer)', () => {
     expect(rig.container.querySelector('.v3d-hud')).toBeNull();
     expect(rig.ctx.commands.get('view.toggleCamera')).toBeUndefined();
     expect(rig.r.dispose).toHaveBeenCalled();
+  });
+  it('first person acts on press and repeats while the button is held, like Minecraft', () => {
+    let clock = 10_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const rig = mount();
+    hold(rig.ctx, 'block-brick');
+    rig.ctx.ui.set({ cameraMode: 'fly' });
+    lock(rig);
+    rig.debug.lookFrom(-3000, -7000, 3000, -3000, -3000, 0);
+    tick(rig.r);
+    const n = ofType(rig.ctx, 'block').length;
+    press(rig, 2);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 1); // on press, not on release
+    tick(rig.r);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 1);
+    clock += REPEAT_DELAY_MS;
+    tick(rig.r);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 2);
+    clock += REPEAT_EVERY_MS;
+    tick(rig.r);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 3);
+    release(2);
+    clock += 1000;
+    tick(rig.r);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 3); // release stops, and is not another click
+    // Holding LMB keeps breaking.
+    press(rig, 0);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 2);
+    clock += REPEAT_DELAY_MS;
+    tick(rig.r);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 1);
+    release(0);
+    expect(rig.container.querySelector('.v3d-hand')!.classList.contains('v3d-show')).toBe(true);
+    expect(rig.container.querySelector('.v3d-hand')!.classList.contains('v3d-swing')).toBe(true);
+  });
+
+  it('walking, you can only reach what is near you; flying reaches far', () => {
+    const rig = mount();
+    hold(rig.ctx, 'block-brick');
+    rig.ctx.ui.set({ cameraMode: 'walk' });
+    lock(rig);
+    const n = ofType(rig.ctx, 'block').length;
+    // Standing on the ground looking at the ground ~30 m away: out of reach.
+    rig.debug.lookFrom(-3000, -10000, 1620, -3000, -40000, 0);
+    tick(rig.r, 5);
+    press(rig, 2);
+    release(2);
+    expect(ofType(rig.ctx, 'block').length).toBe(n);
+    // A few metres ahead: in reach.
+    rig.debug.lookFrom(-3000, -10000, 1620, -3000, -10000 - (WALK_REACH - 2) * 1000, 0);
+    tick(rig.r, 5);
+    press(rig, 2);
+    release(2);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 1);
+    // Flying, the far ground is reachable.
+    rig.ctx.ui.set({ cameraMode: 'fly' });
+    rig.debug.lookFrom(-3000, -10000, 1620, -3000, -40000, 0);
+    tick(rig.r);
+    press(rig, 2);
+    release(2);
+    expect(ofType(rig.ctx, 'block').length).toBe(n + 2);
+  });
+
+  it('RMB opens a door with an animated swing (one undo step); Shift+RMB places against it instead', () => {
+    let clock = 10_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const rig = mount();
+    hold(rig.ctx, 'block-brick');
+    const door = ofType(rig.ctx, 'door').find((d) => (d as Door).style === 'single') as Door;
+    const c = pointAtOffset(rig.ctx.store.getElement(door.hostId) as Wall, door.offset);
+    const p = at(rig, c.x, c.y, 1100);
+    expect(rig.debug.pickAtClient(p.x, p.y)?.elementId).toBe(door.id);
+    const blocks = ofType(rig.ctx, 'block').length;
+    click(rig, p, 2);
+    expect((rig.ctx.store.getElement(door.id) as Door).openAngle).toBe(90);
+    expect(rig.ctx.store.undoLabel).toBe('Open door');
+    expect(ofType(rig.ctx, 'block').length).toBe(blocks);
+    expect(rig.debug.stats().swinging).toBe(1);
+    clock += 1000;
+    tick(rig.r);
+    expect(rig.debug.stats().swinging).toBe(0);
+    rig.ctx.store.undo();
+    tick(rig.r);
+    expect((rig.ctx.store.getElement(door.id) as Door).openAngle ?? 0).toBe(0);
+    click(rig, p, 2, { shiftKey: true });
+    expect((rig.ctx.store.getElement(door.id) as Door).openAngle ?? 0).toBe(0);
+    expect(ofType(rig.ctx, 'block').length).toBe(blocks + 1);
+  });
+
+  it('knows what a right click does by itself: swing doors open, light fixtures switch', () => {
+    const rig = mount();
+    const doors = ofType(rig.ctx, 'door') as Door[];
+    expect(interaction(doors.find((d) => d.style === 'single'))).toBe('door');
+    expect(interaction(doors.find((d) => d.style === 'sliding'))).toBeNull();
+    const furniture = ofType(rig.ctx, 'furniture') as Furniture[];
+    const lamp = furniture.find((f) => f.catalogId.includes('light') || f.catalogId.includes('lamp'))!;
+    expect(interaction(lamp)).toBe('light');
+    expect(interaction(furniture.find((f) => f.catalogId.includes('sofa')))).toBeNull();
+    expect(interaction(undefined)).toBeNull();
   });
 });

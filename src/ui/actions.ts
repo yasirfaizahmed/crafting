@@ -52,8 +52,8 @@ export async function newProject(shell: Shell, mode?: StartMode, skipConfirm = f
   } else if (mode === '3d') {
     const ui = ctx.ui.get();
     const slot = ui.hotbar.findIndex((id) => getCatalogItem(id)?.tool === 'block');
-    ctx.ui.set({ viewMode: '3d', cameraMode: 'fly', hotbarIndex: slot >= 0 ? slot : ui.hotbarIndex, toolHint: 'Fly mode: click the 3D view · WASD move · Space up · Shift down · F toggles orbit' });
-    shell.toast('Welcome to the 3D world! Click the view to fly — right-click places, left-click breaks. Press E for the inventory.', 'info');
+    ctx.ui.set({ viewMode: '3d', cameraMode: 'walk', hotbarIndex: slot >= 0 ? slot : ui.hotbarIndex, toolHint: 'Walk mode: click the 3D view · WASD walk · Space jump · double-tap Space to fly · F orbit' });
+    shell.toast('Welcome to the 3D world! Click the view to walk — right-click places, left-click breaks, double-tap Space to fly. Press E for the inventory.', 'info');
   } else shell.toast('New project created', 'success');
   return true;
 }

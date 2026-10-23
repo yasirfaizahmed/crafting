@@ -42,13 +42,16 @@ export class Observable<T extends object> {
 }
 
 export type ViewMode = 'plan' | '3d' | 'split';
-export type CameraMode = 'fly' | 'orbit';
+/** 3D camera: orbit around a target, or first person walking (gravity) or flying (Minecraft creative). */
+export type CameraMode = 'fly' | 'orbit' | 'walk';
 
 export interface UIState {
   activeLevelId: string;
   viewMode: ViewMode;
-  /** 3D camera mode: Minecraft-style first-person flight, or orbit around a target. */
+  /** 3D camera mode: orbit around a target, or Minecraft-style first person walking or flying. */
   cameraMode: CameraMode;
+  /** Sound effects in the 3D world (placing, breaking, footsteps, doors). */
+  sound: boolean;
   /** Nine catalog item ids. */
   hotbar: string[];
   hotbarIndex: number;
@@ -85,6 +88,7 @@ export function initialUIState(levelId: string): UIState {
     activeLevelId: levelId,
     viewMode: 'split',
     cameraMode: 'orbit',
+    sound: true,
     hotbar: [...DEFAULT_HOTBAR],
     hotbarIndex: 1,
     inventoryOpen: false,

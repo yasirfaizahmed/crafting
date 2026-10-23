@@ -4,10 +4,10 @@
  */
 import * as THREE from 'three';
 import { activeItem, type AppContext, type UIState } from '../app/state';
-import type { CatalogItem, ToolKind } from '../core/catalog';
+import { getFurniture, type CatalogItem, type ToolKind } from '../core/catalog';
 import { planToWorld } from '../core/coords';
 import type { ChangeSet } from '../core/store';
-import type { Element, Project, Vec2 } from '../core/types';
+import type { Door, Element, Furniture, Project, Vec2 } from '../core/types';
 import { formatLength } from '../core/units';
 import { CameraController } from './camera';
 import { registerViewCommands, VIEW_KEYS } from './commands';
@@ -22,10 +22,37 @@ import { MaterialLibrary } from './materials';
 import { ModelSync, type HoverStyle, type ViewFilter } from './model';
 import { Picker } from './picking';
 import { captureFrame } from './renderer';
+import { SoundFx } from './sound';
 import { breakAt, createTool, pickBlockAt } from './tools';
 import type { PickHit, Tool, ToolEnv } from './tools/types';
 import type { CaptureOptions, ViewportHandle } from './types';
 import type { WalkProbe } from './walker';
+
+/** How far the walking player can reach to break, place or use things, metres (fly mode is unlimited). */
+export const WALK_REACH = 6;
+/** Holding a mouse button in first person repeats the action, Minecraft-style. */
+export const REPEAT_DELAY_MS = 300;
+export const REPEAT_EVERY_MS = 200;
+/**
+ * Browsers (Chromium especially) can report a bogus jump of hundreds of pixels in the first mouse
+ * event after pointer lock engages; look deltas beyond this are dropped.
+ */
+const MAX_LOOK_DELTA = 400;
+/** Door swing animation length. */
+const DOOR_ANIM_MS = 320;
+/** Swing angle a right click opens a closed door to. */
+const DOOR_OPEN_ANGLE = 90;
+/** Tools whose right click acts on doors and lights themselves rather than opening / switching them. */
+const NO_INTERACT: ReadonlySet<ToolKind> = new Set(['door', 'window', 'paint', 'eyedropper', 'eraser', 'measure', 'dimension', 'label']);
+/** Tools whose right-click action repeats while the button is held. */
+const RMB_REPEATS: ReadonlySet<ToolKind> = new Set(['block', 'paint']);
+
+/** What a right click on an element does by itself (opening a door, switching a light), if anything. */
+export function interaction(el: Element | undefined): 'door' | 'light' | null {
+  if (el?.type === 'door' && (el.style === 'single' || el.style === 'double')) return 'door';
+  if (el?.type === 'furniture' && getFurniture(el.catalogId)?.light) return 'light';
+  return null;
+}
 
 /** Plan points describing an element's extent (for framing elements without meshes). */
 function planPoints(el: Element): Vec2[] {
@@ -107,6 +134,15 @@ export class Viewport {
   private readonly effects = new Effects();
   private readonly fixtures = new FixtureLights();
   private readonly clicks = new ClickTracker();
+  private readonly sound: SoundFx;
+  /** First person mode the camera toggle returns to. */
+  private lastFirstPerson: 'walk' | 'fly' = 'walk';
+  /** A held mouse button repeating its action (first person). */
+  private hold: { button: number; shift: boolean; next: number } | null = null;
+  /** Buttons whose action already ran on press (first person); their release does nothing. */
+  private readonly pressHandled = new Set<number>();
+  /** Doors swinging open / shut. */
+  private readonly doorAnims = new Map<string, { from: number; to: number; start: number }>();
   private tool: Tool;
   private toolItem: CatalogItem;
   private hoverHit: PickHit | null = null;
@@ -118,6 +154,8 @@ export class Viewport {
   private active = true;
   private capturing = false;
   private locked = false;
+  /** Time pointer lock engaged; look input is ignored for a moment after it. */
+  private lockedAt = 0;
   private revision = 0;
   private lastTime = 0;
   private lightsDirty = true;
@@ -155,11 +193,14 @@ export class Viewport {
     this.ghost = new GhostRenderer(this.materials, () => this.project, this.model);
     this.ghost.onChange = () => (this.needsRender = true);
     this.scene.add(this.ghost.group);
+    this.sound = new SoundFx(() => this.ctx.ui.get().sound);
     this.cam = new CameraController(this.canvas, { probe: this.createProbe(), centerDistance: () => this.centerDistance() });
     this.cam.onFlyingChange = (flying) => {
-      this.hud.setMode(flying ? 'fly' : 'walk');
-      this.toast(flying ? 'Flying' : 'Walking — double-tap Space to fly', 'info');
+      ctx.ui.set({ cameraMode: flying ? 'fly' : 'walk' });
+      this.toast(flying ? 'Flying — double-tap Space to walk' : 'Walking — double-tap Space to fly', 'info');
     };
+    this.cam.onFootstep = () => this.sound.step();
+    this.cam.onLand = (speed) => this.sound.land(speed);
     this.hud = new Hud(container, () => this.requestLock());
     this.resize();
 
@@ -186,7 +227,7 @@ export class Viewport {
       }),
       ctx.events.on('zoom-to', ({ ids }) => this.frame(ids)),
       registerViewCommands(ctx.commands, {
-        toggleCamera: () => ctx.ui.set({ cameraMode: ctx.ui.get().cameraMode === 'fly' ? 'orbit' : 'fly' }),
+        toggleCamera: () => ctx.ui.set({ cameraMode: ctx.ui.get().cameraMode === 'orbit' ? this.lastFirstPerson : 'orbit' }),
         toggleXray: () => ctx.ui.set({ xray: !ctx.ui.get().xray }),
         toggleCutAway: () => ctx.ui.set({ cutAboveActive: !ctx.ui.get().cutAboveActive }),
         resetCamera: () => {
@@ -220,10 +261,10 @@ export class Viewport {
     this.listen(c, 'auxclick', (e) => e.preventDefault());
     this.listen(container, 'keydown', this.onKeyDown as EventListener);
     this.listen(container, 'keyup', this.onKeyUp as EventListener);
-    this.listen(container, 'blur', () => this.cam.releaseKeys());
-    this.listen(window, 'blur', () => this.cam.releaseKeys());
+    this.listen(container, 'blur', () => this.releaseInput());
+    this.listen(window, 'blur', () => this.releaseInput());
     this.listen(document, 'pointerlockchange', this.onLockChange);
-    this.listen(document, 'pointerlockerror', () => this.hud.showOverlay(this.cam.mode === 'fly'));
+    this.listen(document, 'pointerlockerror', () => this.hud.showOverlay(this.cam.firstPerson));
 
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(() => this.resize());
@@ -280,6 +321,7 @@ export class Viewport {
       const item = activeItem(ui);
       if (item.id !== this.toolItem.id) this.switchTool(item);
       if (prev) this.hud.showItem(item.name);
+      this.updateHand();
     }
     if (prev && changed('inventoryOpen') && ui.inventoryOpen && this.locked) document.exitPointerLock();
     if (changed('toolHint')) this.hud.setToolHint(ui.toolHint);
@@ -334,14 +376,22 @@ export class Viewport {
 
   private applyCameraMode(mode: UIState['cameraMode'], initial: boolean): void {
     this.cam.setMode(mode);
+    if (mode !== 'orbit') this.lastFirstPerson = mode;
     this.container.dataset.camera = mode;
-    this.hud.setMode(mode === 'orbit' ? 'orbit' : this.cam.flying ? 'fly' : 'walk');
-    if (mode === 'fly') {
+    this.hud.setMode(mode);
+    if (mode !== 'orbit') {
       if (!initial) this.requestLock();
     } else if (this.locked) document.exitPointerLock();
-    this.hud.showOverlay(mode === 'fly' && !this.locked);
+    this.hud.showOverlay(mode !== 'orbit' && !this.locked);
+    this.updateHand();
     this.pointerDirty = true;
     this.needsRender = true;
+  }
+
+  /** The held item, drawn in the corner while in first person. */
+  private updateHand(): void {
+    const item = this.toolItem;
+    this.hud.setHand(item.icon, item.color, this.cam.firstPerson);
   }
 
   private refreshHighlight(): void {
@@ -371,8 +421,13 @@ export class Viewport {
       toast: (message, kind) => this.toast(message, kind),
       effect: (kind, at, materialId) => {
         const p = new THREE.Vector3(...planToWorld(at.point, at.elevation));
-        if (kind === 'break') this.effects.burst(p, this.materials.color(materialId));
-        else this.effects.pulse(p);
+        if (kind === 'break') {
+          this.effects.burst(p, this.materials.color(materialId));
+          this.sound.break();
+        } else {
+          this.effects.pulse(p);
+          this.sound.place();
+        }
         this.needsRender = true;
       },
     };
@@ -381,6 +436,7 @@ export class Viewport {
   private switchTool(item: CatalogItem): void {
     if (this.drag?.active) this.tool.endDrag?.(false);
     this.drag = null;
+    this.hold = null;
     this.tool.dispose();
     this.ghost.clear();
     this.toolItem = item;
@@ -394,7 +450,7 @@ export class Viewport {
   // Picking
 
   private aim(): boolean {
-    if (this.cam.mode === 'fly') {
+    if (this.cam.firstPerson) {
       this.picker.aim(this.cam.camera, 0, 0);
       return true;
     }
@@ -405,7 +461,9 @@ export class Viewport {
 
   private pick(): PickHit | null {
     if (!this.aim()) return null;
-    return this.picker.pick(this.model.pickables(), this.project, this.ctx.ui.get().activeLevelId);
+    const hit = this.picker.pick(this.model.pickables(), this.project, this.ctx.ui.get().activeLevelId);
+    // Walking, like Minecraft, you can only reach what is near you.
+    return hit && this.cam.mode === 'walk' && hit.distance > WALK_REACH ? null : hit;
   }
 
   private centerDistance(): number | null {
@@ -425,6 +483,10 @@ export class Viewport {
       this.updateHoverInfo();
     }
     this.tool.hover(hit);
+    const el = id ? this.ctx.store.getElement(id) : undefined;
+    const use = NO_INTERACT.has(this.toolItem.tool) ? null : interaction(el);
+    if (use === 'door') this.ctx.ui.set({ toolHint: `RMB: ${((el as Door).openAngle ?? 0) >= 30 ? 'close' : 'open'} door · Shift+RMB: place against it` });
+    else if (use === 'light') this.ctx.ui.set({ toolHint: `RMB: switch ${(el as Furniture).lightOn === false ? 'on' : 'off'} · Shift+RMB: place against it` });
     this.needsRender = true;
   }
 
@@ -473,10 +535,11 @@ export class Viewport {
 
   private requestLock(): void {
     this.container.focus({ preventScroll: true });
-    if (this.cam.mode !== 'fly' || this.locked) return;
+    this.sound.unlock();
+    if (!this.cam.firstPerson || this.locked) return;
     try {
       const r = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
-      if (r && typeof r.catch === 'function') r.catch(() => this.hud.showOverlay(this.cam.mode === 'fly' && !this.locked));
+      if (r && typeof r.catch === 'function') r.catch(() => this.hud.showOverlay(this.cam.firstPerson && !this.locked));
     } catch {
       this.hud.showOverlay(true);
     }
@@ -488,13 +551,17 @@ export class Viewport {
     this.locked = locked;
     this.clicks.reset();
     this.cam.releaseKeys();
-    if (locked) this.container.focus({ preventScroll: true });
-    else if (this.cam.mode === 'fly') {
+    this.hold = null;
+    this.pressHandled.clear();
+    if (locked) {
+      this.lockedAt = performance.now();
+      this.container.focus({ preventScroll: true });
+    } else if (this.cam.firstPerson) {
       if (this.drag?.active) this.tool.endDrag?.(false);
       this.drag = null;
       this.tool.cancel();
     }
-    this.hud.showOverlay(this.cam.mode === 'fly' && !locked);
+    this.hud.showOverlay(this.cam.firstPerson && !locked);
     this.pointerDirty = true;
     this.needsRender = true;
   };
@@ -510,13 +577,21 @@ export class Viewport {
 
   private onMouseDown = (e: MouseEvent): void => {
     this.container.focus({ preventScroll: true });
+    this.sound.unlock();
     if (e.button === 1) e.preventDefault();
-    if (this.cam.mode === 'fly' && !this.locked) {
+    if (this.cam.firstPerson && !this.locked) {
       this.requestLock();
       return;
     }
     if (!this.locked) this.updatePointer(e);
     this.clicks.down(e.button, e.clientX, e.clientY);
+    if (this.locked && !(e.button === 0 && this.tool.beginDrag)) {
+      // First person acts on press like Minecraft (turning while clicking still counts) and
+      // repeats while the button is held.
+      this.pressHandled.add(e.button);
+      if (this.handleClick(e.button, this.pick(), e.shiftKey)) this.hold = { button: e.button, shift: e.shiftKey, next: performance.now() + REPEAT_DELAY_MS };
+      return;
+    }
     if (this.cam.mode === 'orbit' && e.button !== 0) {
       // Orbit / pan around whatever is under the cursor.
       const hit = this.pick();
@@ -530,6 +605,7 @@ export class Viewport {
 
   private onMouseMove = (e: MouseEvent): void => {
     if (this.locked) {
+      if (performance.now() - this.lockedAt < 100 || Math.abs(e.movementX) > MAX_LOOK_DELTA || Math.abs(e.movementY) > MAX_LOOK_DELTA) return;
       this.cam.look(e.movementX, e.movementY);
       this.clicks.moveBy(e.movementX, e.movementY);
       this.pointerDirty = true;
@@ -561,8 +637,10 @@ export class Viewport {
   }
 
   private onMouseUp = (e: MouseEvent): void => {
+    if (this.hold?.button === e.button) this.hold = null;
     if (!this.clicks.isPressed(e.button)) return;
     const click = this.locked ? this.clicks.up(e.button) : this.clicks.up(e.button, e.clientX, e.clientY);
+    if (this.pressHandled.delete(e.button)) return;
     if (e.button === 0 && this.drag) {
       const wasActive = this.drag.active;
       this.drag = null;
@@ -582,21 +660,78 @@ export class Viewport {
     this.handleClick(button, this.pick(), e.shiftKey);
   };
 
-  /** Click semantics: LMB break (or tool primary), MMB pick block, RMB place/use. */
-  private handleClick(button: number, hit: PickHit | null, shift: boolean): void {
+  /**
+   * Click semantics: LMB break (or tool primary), MMB pick block, RMB place/use. RMB on a door or
+   * a light opens / switches it (Shift+RMB places against it instead). Returns whether the action
+   * repeats while the button is held.
+   */
+  private handleClick(button: number, hit: PickHit | null, shift: boolean): boolean {
+    let repeats = false;
     if (button === 0) {
-      if (!this.tool.primary?.(hit, { shift })) breakAt(this.toolEnv(this.toolItem), hit);
+      if (this.tool.primary?.(hit, { shift })) repeats = this.toolItem.tool === 'eraser';
+      else repeats = breakAt(this.toolEnv(this.toolItem), hit);
     } else if (button === 1) {
       pickBlockAt(this.toolEnv(this.toolItem), hit);
     } else if (button === 2) {
-      this.tool.use(hit);
+      const el = hit?.elementId ? this.ctx.store.getElement(hit.elementId) : undefined;
+      if (!shift && !NO_INTERACT.has(this.toolItem.tool) && interaction(el)) this.interact(el!);
+      else {
+        this.tool.use(hit);
+        repeats = RMB_REPEATS.has(this.toolItem.tool);
+      }
     }
+    if (this.cam.firstPerson && button !== 1) this.hud.swing();
+    this.pointerDirty = true;
+    this.needsRender = true;
+    return repeats;
+  }
+
+  /** Open / close a door (animated) or switch a light fixture, as one undo step. */
+  private interact(el: Element): void {
+    if (el.type === 'door') {
+      const from = el.openAngle ?? 0;
+      const to = from >= 30 ? 0 : DOOR_OPEN_ANGLE;
+      this.ctx.store.update<Door>(el.id, { openAngle: to }, to ? 'Open door' : 'Close door');
+      this.doorAnims.set(el.id, { from, to, start: performance.now() });
+      this.sound.door(to > 0);
+    } else if (el.type === 'furniture') {
+      const on = el.lightOn === false;
+      this.ctx.store.update<Furniture>(el.id, { lightOn: on ? undefined : false }, on ? 'Switch light on' : 'Switch light off');
+      this.sound.click();
+    }
+  }
+
+  /** Advance door swing animations: the store already holds the final angle, the view eases to it. */
+  private animateDoors(): void {
+    if (!this.doorAnims.size) return;
+    const now = performance.now();
+    for (const [id, a] of this.doorAnims) {
+      const el = this.ctx.store.getElement(id);
+      if (el?.type !== 'door') {
+        this.doorAnims.delete(id);
+        continue;
+      }
+      const t = Math.min(1, (now - a.start) / DOOR_ANIM_MS);
+      if (t >= 1) this.doorAnims.delete(id);
+      const k = 1 - (1 - t) ** 3;
+      this.model.showVariant(this.project, t >= 1 ? el : { ...el, openAngle: a.from + (a.to - a.from) * k });
+    }
+    this.refreshHighlight();
     this.pointerDirty = true;
     this.needsRender = true;
   }
 
+  /** Repeat the held button's action (first person). */
+  private repeatHeld(): void {
+    const h = this.hold;
+    const now = performance.now();
+    if (!h || !this.locked || now < h.next) return;
+    h.next = now + REPEAT_EVERY_MS;
+    this.handleClick(h.button, this.pick(), h.shift);
+  }
+
   private onWheel = (e: WheelEvent): void => {
-    if (this.cam.mode !== 'fly') {
+    if (!this.cam.firstPerson) {
       this.pointerDirty = true;
       return;
     }
@@ -612,6 +747,7 @@ export class Viewport {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.target !== this.container && isTypingTarget(e.target)) return;
+    this.sound.unlock();
     const k = e.key.toLowerCase();
     const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
     let consumed = false;
@@ -640,6 +776,12 @@ export class Viewport {
     this.cam.keyUp(e.code);
   };
 
+  /** Focus lost: stop moving and stop repeating (the key / button release may never arrive). */
+  private releaseInput(): void {
+    this.cam.releaseKeys();
+    this.hold = null;
+  }
+
   // ---------------------------------------------------------------------------
   // Loop
 
@@ -657,10 +799,12 @@ export class Viewport {
       if (this.drag?.active) this.updateDrag();
     }
     if (this.effects.update(dt)) this.needsRender = true;
+    this.animateDoors();
     if (this.pointerDirty) {
       this.pointerDirty = false;
       this.updateHover();
     }
+    this.repeatHeld();
     if (this.lightsDirty || (moved && time - this.lastLightsUpdate > 1500)) {
       this.fixtures.update(this.model.lights(), this.ctx.ui.get().activeLevelId, this.cam.camera.position);
       this.lightsDirty = false;
@@ -787,6 +931,8 @@ export class Viewport {
         mode: this.cam.mode,
         flying: this.cam.flying,
         animating: this.cam.moving,
+        swinging: this.doorAnims.size,
+        reach: this.cam.mode === 'walk' ? WALK_REACH : null,
         camera: this.cam.player(),
         locked: this.locked,
         ghost: this.ghost.count,
@@ -817,6 +963,7 @@ export class Viewport {
     if (this.locked) document.exitPointerLock();
     if (this.envMapTimer) clearTimeout(this.envMapTimer);
     for (const d of this.disposers.splice(0)) d();
+    this.sound.dispose();
     this.tool.dispose();
     this.ctx.ui.set({ toolHint: '' });
     this.cam.dispose();

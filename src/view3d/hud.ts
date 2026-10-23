@@ -27,9 +27,9 @@ const COMPASS_SVG = `
 </svg>`;
 
 const KEYS: Record<HudMode, string> = {
-  orbit: 'F fly · E inventory · RMB place · LMB break · MMB pick · RMB-drag orbit · MMB-drag pan · wheel zoom',
-  fly: 'F orbit · E inventory · RMB place · LMB break · MMB pick · WASD move · Space/Shift up/down · Ctrl sprint · 2×Space walk · wheel hotbar',
-  walk: 'F orbit · E inventory · RMB place · LMB break · MMB pick · WASD walk · Space jump · Ctrl sprint · 2×Space fly · wheel hotbar',
+  orbit: 'F walk · E inventory · RMB place / open doors · LMB break · MMB pick · RMB-drag orbit · MMB-drag pan · wheel zoom',
+  fly: 'F orbit · E inventory · RMB place (hold to repeat) · LMB break · MMB pick · WASD move · Space/Shift up/down · Ctrl sprint · 2×Space walk · wheel hotbar',
+  walk: 'F orbit · E inventory · RMB place / open doors · LMB break (hold) · MMB pick · WASD walk · Space jump · Shift sneak · Ctrl or 2×W sprint · 2×Space fly',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement): HTMLElementTagNameMap[K] {
@@ -53,6 +53,8 @@ export class Hud {
   private readonly toolHint: HTMLDivElement;
   private readonly keys: HTMLDivElement;
   private readonly item: HTMLDivElement;
+  private readonly hand: HTMLDivElement;
+  private readonly handTile: HTMLDivElement;
   private readonly label: HTMLDivElement;
   private readonly overlay: HTMLDivElement;
   private itemTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,6 +81,9 @@ export class Hud {
     this.dial = compass.querySelector('.v3d-compass-dial');
     this.keys = el('div', 'v3d-keys', this.root);
     this.item = el('div', 'v3d-item', this.root);
+    // The item in hand (first person), swinging on every use like Minecraft.
+    this.hand = el('div', 'v3d-hand', this.root);
+    this.handTile = el('div', 'v3d-hand-tile', this.hand);
     this.label = el('div', 'v3d-label', this.root);
     this.overlay = el('div', 'v3d-overlay', this.root);
     this.overlay.innerHTML = `<div class="v3d-overlay-card"><div class="v3d-overlay-title">Click to resume building</div><div class="v3d-overlay-sub">Esc releases the mouse · F switches to orbit view</div></div>`;
@@ -98,6 +103,20 @@ export class Hud {
     this.modeChip.textContent = mode === 'orbit' ? 'Orbit' : mode === 'fly' ? 'Flying' : 'Walking';
     this.crosshair.style.display = mode === 'orbit' ? 'none' : '';
     this.keys.textContent = KEYS[mode];
+  }
+
+  /** Show the item in hand (first person only). */
+  setHand(icon: string, color: string, visible: boolean): void {
+    this.hand.classList.toggle('v3d-show', visible);
+    this.handTile.textContent = icon;
+    this.handTile.style.setProperty('--hand-color', color);
+  }
+
+  /** Play the arm-swing animation. */
+  swing(): void {
+    this.hand.classList.remove('v3d-swing');
+    void this.hand.offsetWidth; // restart the animation
+    this.hand.classList.add('v3d-swing');
   }
 
   setLevel(name: string, elevation: string): void {

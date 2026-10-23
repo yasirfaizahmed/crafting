@@ -133,8 +133,9 @@ export function mountToolbar(container: HTMLElement, shell: Shell): { update(): 
       'Camera',
       'cr-camera',
       [
-        { value: 'fly', label: 'Fly', icon: 'fly', title: 'Fly camera (Minecraft style, F in 3D)' },
-        { value: 'orbit', label: 'Orbit', icon: 'orbit', title: 'Orbit camera (F in 3D)' },
+        { value: 'orbit', label: 'Orbit', icon: 'orbit', title: 'Orbit around the model (F in 3D switches to first person)' },
+        { value: 'walk', label: 'Walk', icon: 'walk', title: 'Walk through the building like Minecraft: gravity, jumping, sneaking, doors (double-tap Space to fly)' },
+        { value: 'fly', label: 'Fly', icon: 'fly', title: 'Fly freely, Minecraft creative style (double-tap Space to walk)' },
       ],
       () => ui.get().cameraMode,
       (v) => ui.set({ cameraMode: v }),

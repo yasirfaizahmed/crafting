@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { affectedIds } from '../core/dependencies';
 import type { ChangeSet } from '../core/store';
-import type { Element, Project } from '../core/types';
+import type { Door, Element, Project } from '../core/types';
 import { buildElementGeometry, createGeometryContext, type GeometryContext, type LightDef } from '../geometry';
 import { HOVER_COLOR, SELECT_COLOR, type MaterialLibrary } from './materials';
 import { toBufferGeometry, wantsRaise } from './meshes';
@@ -165,16 +165,26 @@ export class ModelSync {
     return this.pickCache;
   }
 
-  /** Visible meshes the walking player collides with (doors and windows are passable). */
+  /**
+   * Visible meshes the walking player collides with. Windows block; swing doors block while
+   * closed (open them with a right click); sliding, pocket, garage doors and openings are passable.
+   */
   colliders(): THREE.Mesh[] {
     if (!this.colliderCache) {
       this.colliderCache = [];
       for (const e of this.entries.values()) {
-        if (!e.shown || e.el.type === 'door' || e.el.type === 'window') continue;
+        if (!e.shown || (e.el.type === 'door' && !doorBlocks(e.el))) continue;
         this.colliderCache.push(...e.meshes);
       }
     }
     return this.colliderCache;
+  }
+
+  /** Show one element as a different version of itself (e.g. a door mid-swing) without touching the store. */
+  showVariant(project: Project, el: Element): void {
+    this.removeEntry(el.id);
+    this.build(createGeometryContext(project), project, el);
+    this.invalidate();
   }
 
   /** Light sources of visible elements. */
@@ -336,4 +346,9 @@ export class ModelSync {
     e.edges = null;
     e.edgeKind = null;
   }
+}
+
+/** Closed swing doors block the walker; open ones (≥ 30°) and non-swing doors do not. */
+export function doorBlocks(d: Door): boolean {
+  return (d.style === 'single' || d.style === 'double') && (d.openAngle ?? 0) < 30;
 }

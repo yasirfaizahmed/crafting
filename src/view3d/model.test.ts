@@ -4,9 +4,9 @@ import { createAppContext } from '../app/context';
 import { createSampleProject } from '../app/sample';
 import { createElement } from '../core/defaults';
 import type { ChangeSet } from '../core/store';
-import type { Project, Wall } from '../core/types';
+import type { Door, Project, Wall } from '../core/types';
 import { MaterialLibrary } from './materials';
-import { ModelSync, type ViewFilter } from './model';
+import { doorBlocks, ModelSync, type ViewFilter } from './model';
 import { Picker } from './picking';
 
 function setup() {
@@ -109,12 +109,40 @@ describe('model sync', () => {
     expect(model.entry(wall.id)!.group.visible).toBe(true);
   });
 
-  it('collects fixture lights and excludes doors from colliders', () => {
-    const { model } = setup();
+  it('collects fixture lights; closed swing doors and windows block the walker, open and sliding doors do not', () => {
+    const { ctx, project, model } = setup();
     expect(model.lights().length).toBeGreaterThan(0);
-    expect(model.colliders().every((m) => !String(m.parent?.name).startsWith('door'))).toBe(true);
+    const doors = Object.values(project.elements).filter((e): e is Door => e.type === 'door');
+    const single = doors.find((d) => d.style === 'single')!;
+    const sliding = doors.find((d) => d.style === 'sliding')!;
+    const collides = (id: string) => model.colliders().some((m) => m.userData.elementId === id);
+    expect(collides(single.id)).toBe(true);
+    expect(collides(sliding.id)).toBe(false);
+    expect(model.colliders().some((m) => String(m.parent?.name).startsWith('window'))).toBe(true);
+    ctx.store.update<Door>(single.id, { openAngle: 90 });
+    expect(collides(single.id)).toBe(false);
     model.dispose();
     expect(model.size).toBe(0);
+  });
+
+  it('doorBlocks: only swing doors opened less than 30° block', () => {
+    const d = (style: Door['style'], openAngle?: number) => ({ style, openAngle }) as Door;
+    expect(doorBlocks(d('single'))).toBe(true);
+    expect(doorBlocks(d('double', 20))).toBe(true);
+    expect(doorBlocks(d('single', 45))).toBe(false);
+    for (const s of ['sliding', 'pocket', 'garage', 'opening'] as const) expect(doorBlocks(d(s))).toBe(false);
+  });
+
+  it('showVariant swaps one element\'s meshes without touching the store', () => {
+    const { project, model } = setup();
+    const door = Object.values(project.elements).find((e): e is Door => e.type === 'door' && e.style === 'single')!;
+    const bounds = () => model.entry(door.id)!.bounds.clone();
+    const closed = bounds();
+    model.showVariant(project, { ...door, openAngle: 90 });
+    expect(bounds().equals(closed)).toBe(false);
+    expect((project.elements[door.id] as Door).openAngle ?? 0).toBe(0);
+    model.showVariant(project, door);
+    expect(bounds().equals(closed)).toBe(true);
   });
 });
 

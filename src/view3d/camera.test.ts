@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { CameraController, DOUBLE_TAP_MS } from './camera';
-import { EYE_HEIGHT, type WalkProbe } from './walker';
+import { BASE_FOV, CameraController, DOUBLE_TAP_MS, SNEAK_SPEED, SPRINT_FOV, WALK_SPEED, WALK_SPRINT } from './camera';
+import { EYE_HEIGHT, SNEAK_EYE_HEIGHT, type WalkProbe } from './walker';
 
 const flatGround: WalkProbe = {
   groundAt: (_x, _z, fromY) => (fromY >= 0 ? 0 : null),
@@ -112,6 +112,79 @@ describe('camera controller', () => {
     cam.keyUp('Space');
     expect(cam.flying).toBe(false);
     cam.dispose();
+  });
+
+  it('walk mode: gravity, sneak (lower and slower), double-tap W sprint with a wider view, footsteps', () => {
+    const cam = make();
+    cam.flyTo(new THREE.Vector3(0, 6, 0), new THREE.Vector3(0, 6, -10), 0);
+    cam.setMode('walk');
+    expect(cam.firstPerson).toBe(true);
+    expect(cam.flying).toBe(false);
+    let landed = 0;
+    let steps = 0;
+    cam.onLand = (v) => (landed = v);
+    cam.onFootstep = () => steps++;
+    run(cam, 2);
+    expect(cam.camera.position.y).toBeCloseTo(EYE_HEIGHT, 3);
+    expect(landed).toBeGreaterThan(8); // fell ~4.4 m
+    // Walk forward for a second: walking speed, footsteps about every 0.75 m.
+    const z0 = cam.camera.position.z;
+    cam.keyDown('KeyW', false, 1000);
+    run(cam, 1);
+    const walked = z0 - cam.camera.position.z;
+    expect(walked).toBeGreaterThan(WALK_SPEED * 0.8);
+    expect(walked).toBeLessThan(WALK_SPEED * 1.05);
+    expect(steps).toBeGreaterThanOrEqual(4);
+    cam.keyUp('KeyW');
+    run(cam, 0.5);
+    // Double-tap W latches sprint: faster and a wider field of view.
+    cam.keyDown('KeyW', false, 5000);
+    cam.keyUp('KeyW');
+    cam.keyDown('KeyW', false, 5000 + DOUBLE_TAP_MS / 2);
+    run(cam, 0.3);
+    const z1 = cam.camera.position.z;
+    run(cam, 1);
+    expect(z1 - cam.camera.position.z).toBeGreaterThan(WALK_SPRINT * 0.9);
+    expect(cam.camera.fov).toBeCloseTo(BASE_FOV * SPRINT_FOV, 1);
+    cam.keyUp('KeyW'); // releasing W ends the sprint
+    run(cam, 1);
+    expect(cam.camera.fov).toBeCloseTo(BASE_FOV, 1);
+    // Shift sneaks: the eye drops and movement slows.
+    cam.keyDown('ShiftLeft');
+    cam.keyDown('KeyW', false, 9000);
+    run(cam, 0.5);
+    const z2 = cam.camera.position.z;
+    run(cam, 1);
+    expect(z2 - cam.camera.position.z).toBeLessThan(SNEAK_SPEED * 1.05);
+    cam.keyUp('KeyW');
+    run(cam, 0.5);
+    expect(cam.camera.position.y).toBeCloseTo(SNEAK_EYE_HEIGHT, 2);
+    cam.keyUp('ShiftLeft');
+    run(cam, 1);
+    expect(cam.camera.position.y).toBeCloseTo(EYE_HEIGHT, 2);
+    expect(cam.moving).toBe(false);
+  });
+
+  it('double-tap Space switches walk ⇄ fly; the mode follows', () => {
+    const cam = make();
+    cam.flyTo(new THREE.Vector3(0, 1.62, 0), new THREE.Vector3(0, 1.62, -10), 0);
+    cam.setMode('walk');
+    const seen: boolean[] = [];
+    cam.onFlyingChange = (f) => seen.push(f);
+    cam.keyDown('Space', false, 1000);
+    cam.keyUp('Space');
+    cam.keyDown('Space', false, 1100);
+    cam.keyUp('Space');
+    expect(cam.mode).toBe('fly');
+    cam.keyDown('Space', false, 3000);
+    cam.keyUp('Space');
+    cam.keyDown('Space', false, 3100);
+    cam.keyUp('Space');
+    expect(cam.mode).toBe('walk');
+    expect(seen).toEqual([true, false]);
+    cam.setMode('orbit');
+    cam.toggleFlying(); // no effect in orbit
+    expect(cam.mode).toBe('orbit');
   });
 
   it('WASD glides the orbit target in orbit mode', () => {

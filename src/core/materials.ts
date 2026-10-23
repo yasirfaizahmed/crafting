@@ -141,6 +141,7 @@ export const MATERIALS: MaterialDef[] = [
   m('foliage', 'Foliage', 'ground', '#3f6f2a'),
   // Light
   m('light-warm', 'Light — Warm Emissive', 'light', '#fff2d6', { emissive: '#ffe2a8' }),
+  m('light-off', 'Light — Switched Off', 'light', '#e9e4da', { roughness: 0.55 }),
   m('insulation', 'Insulation', 'masonry', '#e8d36a', { hatch: 'insulation', density: 30 }),
 ];
 

@@ -282,3 +282,18 @@
     max-width: calc(100% - 84px);
   }
 }
+
+/* Item in hand (first person) */
+.v3d-hand { position: absolute; right: 7%; bottom: -18px; width: 132px; height: 132px; pointer-events: none; opacity: 0; transform: translateY(40px) rotate(-14deg); transition: opacity 0.15s, transform 0.2s; }
+.v3d-hand.v3d-show { opacity: 1; transform: translateY(0) rotate(-14deg); }
+.v3d-hand-tile {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 64px; border-radius: 10px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--hand-color, #888) 90%, white), color-mix(in srgb, var(--hand-color, #888) 75%, black));
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.25), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+.v3d-hand.v3d-swing { animation: v3d-swing 0.22s ease-out; }
+@keyframes v3d-swing {
+  0% { transform: translateY(0) rotate(-14deg); }
+  40% { transform: translate(-46px, -34px) rotate(-38deg); }
+  100% { transform: translateY(0) rotate(-14deg); }
+}

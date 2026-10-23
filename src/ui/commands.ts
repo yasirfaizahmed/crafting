@@ -46,7 +46,7 @@ export function registerGlobalCommands(shell: Shell): () => void {
   const { ctx } = shell;
   const { store, ui, selection, commands } = ctx;
   const hasSelection = () => selection.get().length > 0;
-  const toggle = (key: 'snapGrid' | 'snapObjects' | 'snapAngle' | 'shadows' | 'showGrid' | 'showLevelBelow') => () =>
+  const toggle = (key: 'snapGrid' | 'snapObjects' | 'snapAngle' | 'shadows' | 'showGrid' | 'showLevelBelow' | 'sound') => () =>
     ui.set({ [key]: !ui.get()[key] } as Partial<ReturnType<typeof ui.get>>);
   const setLevel = (dir: 1 | -1) => () => {
     const id = adjacentLevelId(store.project, ui.get().activeLevelId, dir);
@@ -110,8 +110,10 @@ export function registerGlobalCommands(shell: Shell): () => void {
     { id: 'view.mode.split', label: 'Split View', group: 'View', run: () => ui.set({ viewMode: 'split' }) },
     { id: 'view.mode.3d', label: '3D World', group: 'View', run: () => ui.set({ viewMode: '3d' }) },
     { id: 'view.cycle', label: 'Cycle Views', group: 'View', keys: ['tab'], when: focusOnCanvasOrBody, run: () => ui.set({ viewMode: nextViewMode(ui.get().viewMode) }) },
-    { id: 'view.camera.fly', label: 'Fly Camera', group: 'View', run: () => ui.set({ cameraMode: 'fly' }) },
     { id: 'view.camera.orbit', label: 'Orbit Camera', group: 'View', run: () => ui.set({ cameraMode: 'orbit' }) },
+    { id: 'view.camera.walk', label: 'Walk Camera', group: 'View', run: () => ui.set({ cameraMode: 'walk' }) },
+    { id: 'view.camera.fly', label: 'Fly Camera', group: 'View', run: () => ui.set({ cameraMode: 'fly' }) },
+    { id: 'view.sound', label: 'Sound Effects', group: 'View', run: toggle('sound') },
     { id: 'view.frameAll', label: 'Zoom to Fit', group: 'View', run: () => ctx.events.emit('zoom-to', { ids: [] }) },
     { id: 'view.zoomSelection', label: 'Zoom to Selection', group: 'View', enabled: hasSelection, run: () => ctx.events.emit('zoom-to', { ids: [...selection.get()] }) },
     { id: 'view.shadows', label: 'Sun Shadows', group: 'View', run: toggle('shadows') },
@@ -179,8 +181,9 @@ export const MENU_LAYOUT: Record<string, string[]> = {
     'view.mode.3d',
     'view.cycle',
     '-',
-    'view.camera.fly',
     'view.camera.orbit',
+    'view.camera.walk',
+    'view.camera.fly',
     'view.toggleCamera',
     'view.resetCamera',
     'view.topView',
@@ -195,6 +198,7 @@ export const MENU_LAYOUT: Record<string, string[]> = {
     'view.shadows',
     'view.showGrid',
     'view.levelBelow',
+    'view.sound',
     '-',
     'level.up',
     'level.down',
@@ -247,6 +251,10 @@ export function commandChecked(shell: Shell, id: string): boolean | undefined {
       return u.viewMode === '3d';
     case 'view.camera.fly':
       return u.cameraMode === 'fly';
+    case 'view.camera.walk':
+      return u.cameraMode === 'walk';
+    case 'view.sound':
+      return u.sound;
     case 'view.camera.orbit':
       return u.cameraMode === 'orbit';
     case 'view.xray':

@@ -427,6 +427,16 @@ export const ELEMENT_SCHEMAS: Record<ElementType, ElementSchema> = {
     axisField('position', 'x', 'X'),
     axisField('position', 'y', 'Y'),
     { key: 'mirrored', label: 'Mirrored', kind: 'checkbox', section: 'Placement' },
+    {
+      key: 'lightOn',
+      label: 'Light on',
+      kind: 'checkbox',
+      section: 'Options',
+      hint: 'Right-click the fixture in the 3D view to switch it',
+      visible: (f) => !!getFurniture(f.catalogId)?.light,
+      get: (f) => f.lightOn !== false,
+      set: (_f, v) => ({ lightOn: v === true ? undefined : false }) as Partial<Element>,
+    },
     materialField('materialId', 'Primary material', true, 'Default') as FieldDef<ElementOfType<'furniture'>>,
   ]),
   room: typed('room', 'Room', [

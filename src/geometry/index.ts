@@ -12,7 +12,7 @@
  * stairs.ts, structure.ts (columns/beams), railings.ts, blocks.ts, furniture/*.ts. They share the
  * modelling DSL in model.ts and the 2D helpers in poly2d.ts.
  */
-import { hasMaterial } from '../core/materials';
+import { getMaterial, hasMaterial } from '../core/materials';
 import type { Element, Project } from '../core/types';
 import { computeWallFootprints, type WallFootprint } from '../core/walls';
 import { buildBlock } from './blocks';
@@ -57,6 +57,9 @@ function sanitize(parts: GeometryPart[]): GeometryPart[] {
   });
 }
 
+/** Material for the glowing parts of a switched-off light fixture. */
+const LIGHT_OFF = 'light-off';
+
 export function buildElementGeometry(ctx: GeometryContext, el: Element): ElementGeometry {
   const out: ElementGeometry = { elementId: el.id, parts: [], lights: [] };
   if (el.hidden) return out;
@@ -90,6 +93,7 @@ export function buildElementGeometry(ctx: GeometryContext, el: Element): Element
         const f = buildFurniture(ctx, el);
         out.parts = f.parts;
         out.lights = f.lights.filter((l) => l.position.every(Number.isFinite));
+        if (el.lightOn === false) out.lights = [];
         break;
       }
       case 'block':
@@ -112,6 +116,8 @@ export function buildElementGeometry(ctx: GeometryContext, el: Element): Element
   out.parts = sanitize(out.parts);
   const overrides = el.partMaterials;
   if (overrides) out.parts = out.parts.map((p) => (overrides[partKey(p)] && hasMaterial(overrides[partKey(p)]) ? { ...p, materialId: overrides[partKey(p)] } : p));
+  // A switched-off fixture: glowing parts lose their glow.
+  if (el.type === 'furniture' && el.lightOn === false) out.parts = out.parts.map((p) => (p.role === 'light' && getMaterial(p.materialId).emissive ? { ...p, materialId: LIGHT_OFF } : p));
   return out;
 }
 

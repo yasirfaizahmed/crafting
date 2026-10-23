@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getMaterial } from '../../core/materials';
 import type { Door, Element, Project, Railing, Window } from '../../core/types';
 import { buildElementGeometry, createGeometryContext, partKey } from '../index';
 import type { GeometryPart } from '../types';
@@ -73,5 +74,28 @@ describe('railings and part materials', () => {
     expect(parts.filter((p) => p.role === 'detail').every((p) => p.materialId === 'copper')).toBe(true);
     // Unknown materials are ignored.
     expect(parts.filter((p) => p.role === 'panel').every((p) => p.materialId !== 'nope')).toBe(true);
+  });
+});
+
+describe('light fixtures', () => {
+  it('switch off: no light source and no glowing parts; on again restores both', () => {
+    const { project, add } = testProject();
+    for (const catalogId of ['ceiling-light', 'pendant-light', 'floor-lamp', 'wall-light']) {
+      const on = add('furniture', { catalogId, position: { x: 0, y: 0 } });
+      const lit = buildElementGeometry(createGeometryContext(project), on);
+      expect(lit.lights).toHaveLength(1);
+      expect(lit.parts.some((p) => p.role === 'light' && getMaterial(p.materialId).emissive)).toBe(true);
+      const off = buildElementGeometry(createGeometryContext(project), { ...on, lightOn: false } as Element);
+      expect(off.lights).toHaveLength(0);
+      expect(off.parts.some((p) => getMaterial(p.materialId).emissive)).toBe(false);
+      expect(off.parts.length).toBe(lit.parts.length);
+      expectValidParts(off.parts);
+    }
+  });
+
+  it('a part painted with an emissive material also goes dark when switched off', () => {
+    const { project, add } = testProject();
+    const lamp = add('furniture', { catalogId: 'floor-lamp', position: { x: 0, y: 0 }, partMaterials: { shade: 'light-warm' }, lightOn: false });
+    expect(build(project, lamp).some((p) => getMaterial(p.materialId).emissive)).toBe(false);
   });
 });
