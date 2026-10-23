@@ -172,6 +172,38 @@ export interface Roof extends ElementBase {
 /** 'open-well': U stair of three flights and two corner landings around an open well. */
 export type StairShape = 'straight' | 'l-shape' | 'u-shape' | 'open-well' | 'spiral';
 
+/** One straight run of a custom stair (see Stair.runs). */
+export interface StairFlightSpec {
+  /** Treads (goings) in the flight. Its risers = treads + 1: the last one lands on the next landing or floor. */
+  treads: number;
+  /** Tread depth (going) of this flight, mm. Undefined = the stair's `tread`. */
+  going?: number;
+  /** Clear width of this flight, mm. Undefined = the stair's `width`. */
+  width?: number;
+}
+
+/** The landing between two flights of a custom stair. */
+export interface StairLandingSpec {
+  /** 'none' = straight-through landing; 'left' / 'right' = the next flight turns that way. */
+  turn: 'none' | 'left' | 'right';
+  /** Quarter (90°) or half (180°, U) turn. Ignored for 'none'. Default 90. */
+  angle?: 90 | 180;
+  /** Landing length along the incoming flight, mm. Undefined = just fits the next flight. */
+  depth?: number;
+  /** Half turns: the open well between the two flights, mm. Undefined = 100. */
+  gap?: number;
+}
+
+/** Flights and landings in walking order: landings[i] sits between flights[i] and flights[i + 1]. */
+export interface StairRuns {
+  flights: StairFlightSpec[];
+  landings: StairLandingSpec[];
+}
+
+export type StairStructure = 'auto' | 'solid' | 'stringers';
+export type StairRisers = 'auto' | 'closed' | 'open';
+export type StairHandrails = 'both' | 'left' | 'right' | 'none';
+
 export interface Stair extends ElementBase {
   type: 'stair';
   /** Centre of the bottom edge of the first tread (plan, mm). */
@@ -194,6 +226,30 @@ export interface Stair extends ElementBase {
   secondFlightTreads?: number;
   /** Spiral only: outer radius uses width; this is the central column radius. */
   innerRadius?: number;
+  /**
+   * Custom flights and landings. When set, they replace the `shape` preset (and its tread split), and
+   * the riser count is fixed by the flights: Σ(treads + 1). Riser height = total rise / riser count.
+   */
+  runs?: StairRuns;
+  // --- Construction details (undefined = sensible default) ---------------------------------------
+  /** 'solid' concrete-style flights, or 'stringers' with separate treads. 'auto' follows the material. */
+  structure?: StairStructure;
+  /** Stringer stairs: closed (with riser boards) or open risers. 'auto' = closed for wood, open for metal. */
+  risers?: StairRisers;
+  /** Tread nosing projection, mm (default 25). */
+  nosing?: number;
+  /** Tread board thickness for stringer stairs, mm (default 40). */
+  treadThickness?: number;
+  /** Stringer board thickness, mm (default 45). */
+  stringerThickness?: number;
+  /** Landing slab / platform thickness, mm (default 200 solid, 120 stringers). */
+  landingThickness?: number;
+  /** Handrail sides, looking up the stair (default both). */
+  handrails?: StairHandrails;
+  /** Handrail height above the pitch line / landing, mm (default 900). */
+  railHeight?: number;
+  /** Baluster spacing (clear gap), mm (default 110). */
+  balusterSpacing?: number;
 }
 
 export interface Column extends ElementBase {

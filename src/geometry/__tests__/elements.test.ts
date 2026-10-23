@@ -86,7 +86,7 @@ describe('stairs', () => {
         expect(openEdges(parts)).toBe(0);
         expect(volumeOf(parts)).toBeGreaterThan(0);
         const layout = computeStairLayout(st, 3000);
-        const steps = parts.filter((p) => p.name !== 'handrail');
+        const steps = parts.filter((p) => p.role !== 'detail'); // everything but rail posts, balusters and handrails
         for (const t of [...layout.treads, ...layout.landings]) {
           const zs = upAt(steps, centroid(t.polygon));
           // Spiral treads overlap in plan after a full turn: look for the tread's own surface there.
