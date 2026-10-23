@@ -70,11 +70,13 @@ export function explodeDimension(d: DimensionEntity, drawingScale: number, units
   const gap = DIM_STYLE.extensionGap * s;
   if (Math.abs(d.offset) > gap + 1e-6) {
     const beyond = DIM_STYLE.extensionBeyond * s;
+    const fixed = d.extensionLength !== undefined ? Math.min(d.extensionLength * s, Math.abs(d.offset) - gap) : null;
     for (const [p, q] of [
       [d.a, A],
       [d.b, B],
     ] as const) {
-      extensions.push([add(p, scale(n, side * gap)), add(q, scale(n, side * beyond))]);
+      const start = fixed !== null ? sub(q, scale(n, side * fixed)) : add(p, scale(n, side * gap));
+      extensions.push([start, add(q, scale(n, side * beyond))]);
     }
   }
   const ext = DIM_STYLE.lineBeyond * s;

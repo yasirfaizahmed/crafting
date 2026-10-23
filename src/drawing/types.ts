@@ -104,6 +104,11 @@ export interface DimensionEntity extends EntityBase {
   text?: string;
   /** Explicit text centre (model mm) when the text does not fit between the extension lines. */
   textPosition?: Vec2;
+  /**
+   * Fixed extension line length in PAPER mm, measured from the dimension line towards the object
+   * (stacked exterior chains). Default: extension lines run from the object (with a small gap).
+   */
+  extensionLength?: number;
 }
 
 export type DrawingEntity = LineEntity | PolylineEntity | FillEntity | ArcEntity | CircleEntity | TextEntity | DimensionEntity;

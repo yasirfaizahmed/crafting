@@ -3,11 +3,12 @@
  * exterior dimension chains (A-ANNO-DIMS), north arrow, scale bar and view title (A-ANNO-SYMB).
  */
 import { interiorPoint } from '../../core/autobuild';
-import { add, dot, normalize, perp, polygonArea, rotate, scale, sub, type Bounds2 } from '../../core/math2d';
+import { add, boundsOf, dot, normalize, perp, pointInPolygon, polygonArea, rotate, scale, sub, type Bounds2 } from '../../core/math2d';
 import type { Dimension, Label, Opening, Room, Vec2, Wall } from '../../core/types';
 import { formatArea } from '../../core/units';
 import { wallDirection, wallFaceOffsets, wallNormal } from '../../core/walls';
 import { dimensionTextFits, outsideTextPosition } from '../dimension';
+import { arcPoints } from '../geom';
 import { PEN, TEXT } from '../layers';
 import { textWidth } from '../text';
 import { exteriorSide, mm, openingFrame, type PlanContext } from './context';
@@ -15,7 +16,6 @@ import { exteriorSide, mm, openingFrame, type PlanContext } from './context';
 export function drawRoomTag(ctx: PlanContext, r: Room): void {
   if (r.outline.length < 3) return;
   const { b } = ctx;
-  const c = interiorPoint(r.outline);
   const area = formatArea(polygonArea(r.outline), ctx.project.settings.units);
   const id = { elementId: r.id };
   const nameH = TEXT.normal * ctx.scale;
@@ -26,11 +26,69 @@ export function drawRoomTag(ctx: PlanContext, r: Room): void {
   lines.push({ text: (r.name || 'Room').toUpperCase(), h: nameH, tag: 'room-name', bold: true });
   lines.push({ text: area, h: smallH, tag: 'room-area' });
   const total = lines.reduce((s, l) => s + l.h, 0) + gap * (lines.length - 1);
+  const width = Math.max(...lines.map((l) => textWidth(l.text, l.h / ctx.scale, l.bold) * ctx.scale));
+  const c = tagPosition(ctx, r.outline, width + mm(ctx, 4), total + mm(ctx, 2.5));
   let y = c.y + total / 2;
   for (const l of lines) {
     b.text('A-AREA-IDEN', { x: c.x, y: y - l.h / 2 }, l.text, l.h / ctx.scale, { ...id, tag: l.tag, bold: l.bold });
     y -= l.h + gap;
   }
+}
+
+/**
+ * Tag centre inside the room, as close to its visual centre as possible while keeping the tag box
+ * inside the outline and clear of furniture symbols.
+ */
+function tagPosition(ctx: PlanContext, outline: Vec2[], w: number, h: number): Vec2 {
+  const c0 = interiorPoint(outline);
+  const boxes = new Map<string, Bounds2>();
+  for (const e of ctx.b.only(['I-FURN', 'A-FLOR-STRS', 'S-COLS', 'A-GENM', 'A-DOOR'])) {
+    if (!e.elementId) continue;
+    const bb = boxes.get(e.elementId) ?? { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    const pts = e.kind === 'polyline' ? e.points : e.kind === 'arc' ? arcPoints(e.center, e.radius, e.startAngle, e.endAngle, 10) : e.kind === 'circle' ? [add(e.center, { x: -e.radius, y: -e.radius }), add(e.center, { x: e.radius, y: e.radius })] : [];
+    for (const p of pts) {
+      bb.minX = Math.min(bb.minX, p.x);
+      bb.minY = Math.min(bb.minY, p.y);
+      bb.maxX = Math.max(bb.maxX, p.x);
+      bb.maxY = Math.max(bb.maxY, p.y);
+    }
+    boxes.set(e.elementId, bb);
+  }
+  /** Overlap area with furniture (Infinity when the box leaves the room). */
+  const cost = (c: Vec2) => {
+    const x0 = c.x - w / 2;
+    const x1 = c.x + w / 2;
+    const y0 = c.y - h / 2;
+    const y1 = c.y + h / 2;
+    const corners = [c, { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    if (!corners.every((p) => pointInPolygon(p, outline))) return Infinity;
+    let a = 0;
+    for (const bb of boxes.values()) a += Math.max(0, Math.min(x1, bb.maxX) - Math.max(x0, bb.minX)) * Math.max(0, Math.min(y1, bb.maxY) - Math.max(y0, bb.minY));
+    return a;
+  };
+  if (cost(c0) === 0) return c0;
+  const bb = boundsOf(outline);
+  const step = Math.max(25, mm(ctx, 0.5));
+  const nx = Math.min(200, Math.ceil((bb.maxX - bb.minX) / step));
+  const ny = Math.min(200, Math.ceil((bb.maxY - bb.minY) / step));
+  let best = c0;
+  let bestScore = cost(c0) === Infinity ? Infinity : cost(c0) * 4 / (w * h) * 1e6;
+  for (let i = -nx; i <= nx; i++) {
+    for (let j = -ny; j <= ny; j++) {
+      const p = { x: c0.x + i * step, y: c0.y + j * step };
+      const dist = Math.hypot(i * step, j * step * 1.5);
+      if (dist >= bestScore) continue;
+      const a = cost(p);
+      if (a === Infinity) continue;
+      // Overlap is far worse than distance: 1% of the box overlapped ≈ 40 mm*… of travel.
+      const score = dist + (a / (w * h)) * 4e6;
+      if (score < bestScore) {
+        best = p;
+        bestScore = score;
+      }
+    }
+  }
+  return best;
 }
 
 export function drawLabel(ctx: PlanContext, l: Label): void {
@@ -194,7 +252,7 @@ export function drawExteriorChains(ctx: PlanContext, extent: Bounds2): Dimension
       // Offset is measured along perp(a→b) (left of the dimension direction).
       const offset = (lineCoord - faceCoord) * dot(s.normal, perp(u));
       const d = { a, b: c, offset };
-      const extra: { tag: string; textPosition?: Vec2 } = { tag: `chain-${ch.side}-${ch.kind}` };
+      const extra: { tag: string; textPosition?: Vec2; extensionLength: number } = { tag: `chain-${ch.side}-${ch.kind}`, extensionLength: k === 0 ? CHAIN_FIRST - 2 : CHAIN_STEP - 1 };
       if (!dimensionTextFits(d, ctx.scale, ctx.b.units)) extra.textPosition = outsideTextPosition(d, i === 0 ? 'a' : 'b', ctx.scale, ctx.b.units);
       ctx.b.dimension('A-ANNO-DIMS', a, c, offset, extra);
     }

@@ -155,8 +155,7 @@ function drawWalkline(ctx: PlanContext, s: Stair, walk: Vec2[], mode: 'up' | 'do
   b.fill(LAYER, [end, add(base, scale(perp(dir), aw)), add(base, scale(perp(dir), -aw))], '#000000', { ...id, tag: 'arrow' });
   b.circle(LAYER, pts[0], mm(ctx, 0.7), { ...id, tag: 'walkline-start', lineweight: PEN.fine });
   const d0 = normalize(sub(pts[1], pts[0]));
-  const lateral = perp(d0);
-  const labelAt = add(add(pts[0], scale(d0, mm(ctx, 3))), scale(lateral, Math.min(s.width / 4, mm(ctx, 4))));
+  const labelAt = sub(pts[0], scale(d0, mm(ctx, 3.2)));
   b.text('A-ANNO-TEXT', labelAt, mode === 'up' ? 'UP' : 'DN', TEXT.small, { ...id, tag: 'stair-label', bold: true });
 }
 
