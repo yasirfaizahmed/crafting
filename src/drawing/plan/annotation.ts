@@ -11,6 +11,7 @@ import { dimensionTextFits, outsideTextPosition } from '../dimension';
 import { arcPoints } from '../geom';
 import { PEN, TEXT } from '../layers';
 import { textWidth } from '../text';
+import type { DrawingBuilder } from '../builder';
 import { exteriorSide, mm, openingFrame, type PlanContext } from './context';
 
 export function drawRoomTag(ctx: PlanContext, r: Room): void {
@@ -279,11 +280,10 @@ export function drawNorthArrow(ctx: PlanContext, c: Vec2): void {
 }
 
 /** Graphic scale bar with its left end at `at` (model, baseline of the bar). Returns its width. */
-export function drawScaleBar(ctx: PlanContext, at: Vec2): number {
-  const { b } = ctx;
+export function drawScaleBar(b: DrawingBuilder, scale: number, at: Vec2, layer = 'A-ANNO-SYMB'): number {
   const units = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 50000];
-  const unit = units.find((u) => (5 * u) / ctx.scale >= 35) ?? units[units.length - 1];
-  const h = mm(ctx, 1.4);
+  const unit = units.find((u) => (5 * u) / scale >= 35) ?? units[units.length - 1];
+  const h = 1.4 * scale;
   for (let i = 0; i < 5; i++) {
     const x0 = at.x + i * unit;
     const box = [
@@ -292,11 +292,11 @@ export function drawScaleBar(ctx: PlanContext, at: Vec2): number {
       { x: x0 + unit, y: at.y + h },
       { x: x0, y: at.y + h },
     ];
-    b.fill('A-ANNO-SYMB', box, i % 2 === 0 ? '#000000' : '#ffffff', { tag: 'scale-bar', stroke: true, lineweight: PEN.fine });
+    b.fill(layer, box, i % 2 === 0 ? '#000000' : '#ffffff', { tag: 'scale-bar', stroke: true, lineweight: PEN.fine });
   }
   const fmt = (v: number) => (unit >= 1000 ? `${+(v / 1000).toFixed(2)}` : `${v}`);
   for (let i = 0; i <= 5; i++) {
-    b.text('A-ANNO-SYMB', { x: at.x + i * unit, y: at.y + h + mm(ctx, 1) }, i === 5 ? `${fmt(i * unit)} ${unit >= 1000 ? 'm' : 'mm'}` : fmt(i * unit), TEXT.tiny, {
+    b.text(layer, { x: at.x + i * unit, y: at.y + h + scale }, i === 5 ? `${fmt(i * unit)} ${unit >= 1000 ? 'm' : 'mm'}` : fmt(i * unit), TEXT.tiny, {
       tag: 'scale-bar',
       valign: 'bottom',
       align: i === 5 ? 'left' : 'center',
@@ -305,14 +305,13 @@ export function drawScaleBar(ctx: PlanContext, at: Vec2): number {
   return 5 * unit;
 }
 
-/** View title under the drawing: "GROUND FLOOR PLAN" + "SCALE 1:100" and a scale bar. */
-export function drawViewTitle(ctx: PlanContext, title: string, at: Vec2, withScaleBar: boolean): void {
-  const { b } = ctx;
+/** View title under a drawing: "GROUND FLOOR PLAN" + "SCALE 1:100" and a scale bar. */
+export function drawViewTitle(b: DrawingBuilder, scale: number, title: string, at: Vec2, withScaleBar: boolean, layer = 'A-ANNO-SYMB'): void {
   const h = TEXT.large;
-  b.text('A-ANNO-SYMB', at, title, h, { tag: 'view-title', bold: true, align: 'left', valign: 'baseline' });
-  const w = textWidth(title, h, true) * ctx.scale;
-  const under = at.y - mm(ctx, 1.6);
-  b.line('A-ANNO-SYMB', { x: at.x, y: under }, { x: at.x + w, y: under }, { tag: 'view-title', lineweight: PEN.thick });
-  b.text('A-ANNO-SYMB', { x: at.x, y: under - mm(ctx, 1.6) }, `SCALE 1:${ctx.scale}`, TEXT.small, { tag: 'view-scale', align: 'left', valign: 'top' });
-  if (withScaleBar) drawScaleBar(ctx, { x: at.x + Math.max(w, mm(ctx, 30)) + mm(ctx, 12), y: under - mm(ctx, 4) });
+  b.text(layer, at, title, h, { tag: 'view-title', bold: true, align: 'left', valign: 'baseline' });
+  const w = textWidth(title, h, true) * scale;
+  const under = at.y - 1.6 * scale;
+  b.line(layer, { x: at.x, y: under }, { x: at.x + w, y: under }, { tag: 'view-title', lineweight: PEN.thick });
+  b.text(layer, { x: at.x, y: under - 1.6 * scale }, `SCALE 1:${scale}`, TEXT.small, { tag: 'view-scale', align: 'left', valign: 'top' });
+  if (withScaleBar) drawScaleBar(b, scale, { x: at.x + Math.max(w, 30 * scale) + 12 * scale, y: under - 4 * scale }, layer);
 }

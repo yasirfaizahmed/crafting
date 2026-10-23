@@ -118,7 +118,7 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
   const all = drawingBounds(b.entities(PLAN_LAYERS), scale, b.units);
   if (!isEmptyBounds(all)) {
     if (options.includeNorthArrow !== false) drawNorthArrow(ctx, { x: all.maxX + mm(ctx, 14), y: all.maxY - mm(ctx, 12) });
-    if (options.includeTitle !== false) drawViewTitle(ctx, planTitle(level), { x: all.minX, y: all.minY - mm(ctx, 12) }, true);
+    if (options.includeTitle !== false) drawViewTitle(b, scale, planTitle(level), { x: all.minX, y: all.minY - mm(ctx, 12) }, true);
   }
   return b.build(`${level.name || 'Level'} — Floor Plan`, PLAN_LAYERS);
 }

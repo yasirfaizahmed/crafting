@@ -79,8 +79,8 @@ export const PLAN_LAYERS: DrawingLayer[] = [
 /** Elevation / section layers in painter's order. */
 export const ELEVATION_LAYERS: DrawingLayer[] = [
   L('A-ELEV', '#1a1a1a', PEN.fine, 'continuous', 'Elevation: visible surfaces', 7),
-  L('A-SECT-MCUT', '#000000', PEN.thick, 'continuous', 'Section: material cut', 7),
   L('A-SECT-PATT', '#5a5a5a', PEN.extraFine, 'continuous', 'Section: cut hatching', 8),
+  L('A-SECT-MCUT', '#000000', PEN.thick, 'continuous', 'Section: material cut', 7),
   L('A-ELEV-OTLN', '#000000', PEN.heavy, 'continuous', 'Ground line and outlines', 7),
   L('A-ANNO-SYMB', '#000000', PEN.thin, 'continuous', 'Symbols: level datums, titles', 7),
   L('A-ANNO-TEXT', '#000000', PEN.thin, 'continuous', 'Text and labels', 7),

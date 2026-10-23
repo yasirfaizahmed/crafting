@@ -106,7 +106,7 @@ export const HATCHES: Record<Exclude<HatchPattern, 'none' | 'solid'>, HatchDefin
   earth: {
     dxfName: 'EARTH',
     dxfType: 1,
-    paperSpacing: 0.5,
+    paperSpacing: 0.75,
     families: [
       fam(0, [0, 0], [4, 4], [4, -4]),
       fam(0, [0, 1.5], [4, 4], [4, -4]),
