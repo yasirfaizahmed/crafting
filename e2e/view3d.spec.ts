@@ -170,7 +170,9 @@ test('doors on walls, one-click room floors, auto roofs and drag-moving', async 
   // Door on the south facade (seen from the default south-east view).
   await holdItem(page, 'door-double');
   const doorsBefore = (await elements(page, 'door')).length;
-  const doorPt = await toScreen(page, 6000, -125, 1200);
+  // Whole pixels: the browser truncates fractional mouse coordinates, and 100 mm is only ~2 px here.
+  const rawDoorPt = await toScreen(page, 6000, -125, 1200);
+  const doorPt = { x: Math.round(rawDoorPt.x), y: Math.round(rawDoorPt.y) };
   await page.mouse.move(doorPt.x, doorPt.y);
   await waitIdle(page);
   await shot(page, 'view3d-door-ghost');
