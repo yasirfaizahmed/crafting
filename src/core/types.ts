@@ -169,7 +169,8 @@ export interface Roof extends ElementBase {
   ridgeAngle: number;
 }
 
-export type StairShape = 'straight' | 'l-shape' | 'u-shape' | 'spiral';
+/** 'open-well': U stair of three flights and two corner landings around an open well. */
+export type StairShape = 'straight' | 'l-shape' | 'u-shape' | 'open-well' | 'spiral';
 
 export interface Stair extends ElementBase {
   type: 'stair';
@@ -187,8 +188,10 @@ export interface Stair extends ElementBase {
   maxRiser: number;
   /** For l/u shapes: turn direction. Spirals: winding direction going up. */
   turn: 'left' | 'right';
-  /** For l/u shapes: treads in the first flight (before the landing). Undefined = half of them. */
+  /** For l/u/open-well shapes: treads in the first flight (before the landing). Undefined = an even split. */
   firstFlightTreads?: number;
+  /** Open-well only: treads in the middle flight, which sets the width of the well. Undefined = a third. */
+  secondFlightTreads?: number;
   /** Spiral only: outer radius uses width; this is the central column radius. */
   innerRadius?: number;
 }

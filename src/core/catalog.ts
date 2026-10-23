@@ -276,6 +276,7 @@ export const CATALOG: CatalogItem[] = [
   item('stair-straight', 'Stair — Straight', 'circulation', 'stair', '🪜', '#a9a9a4', { shape: 'straight', width: 1000 }),
   item('stair-l', 'Stair — L Shape', 'circulation', 'stair', '🪜', '#b88a55', { shape: 'l-shape', width: 1000, materialId: 'wood-oak' }),
   item('stair-u', 'Stair — U Shape', 'circulation', 'stair', '🪜', '#bdbcb7', { shape: 'u-shape', width: 1100 }),
+  item('stair-u3', 'Stair — U, 3 Flights (Open Well)', 'circulation', 'stair', '🪜', '#c9b28f', { shape: 'open-well', width: 1000, turn: 'right' }),
   item('stair-spiral', 'Stair — Spiral', 'circulation', 'stair', '🌀', '#8a9097', { shape: 'spiral', width: 900, materialId: 'steel' }),
   item('railing-bars', 'Railing — Balusters', 'circulation', 'railing', '┼', '#2a2b2d', { style: 'bars', height: 1000 }),
   item('railing-glass', 'Railing — Glass', 'circulation', 'railing', '▯', '#cfe6f2', { style: 'glass', height: 1000, materialId: 'glass-clear' }),

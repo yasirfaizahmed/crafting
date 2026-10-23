@@ -98,7 +98,7 @@ describe('stairwells', () => {
   });
 
   it('covers L and U stairs with one opening over the whole stair', () => {
-    for (const shape of ['l-shape', 'u-shape'] as const) {
+    for (const shape of ['l-shape', 'u-shape', 'open-well'] as const) {
       const { p, stair, floor } = twoStoreys({ shape, position: { x: 1500, y: 1500 } });
       const outline = stairwellOutline({ ...stair, shape }, 3000);
       expect(outline).toHaveLength(4);

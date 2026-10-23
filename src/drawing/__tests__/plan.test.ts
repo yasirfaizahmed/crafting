@@ -215,7 +215,7 @@ describe('generatePlanDrawing — robustness', () => {
     (['casement', 'sliding', 'fixed', 'awning', 'double-hung'] as const).forEach((style, i) =>
       add(createElement('window', L.id, { hostId: walls[2].id, offset: 1000 + i * 1800, width: 1200, style })),
     );
-    (['straight', 'l-shape', 'u-shape', 'spiral'] as const).forEach((shape, i) =>
+    (['straight', 'l-shape', 'u-shape', 'spiral', 'open-well'] as const).forEach((shape, i) =>
       add(createElement('stair', L.id, { position: { x: 1500 + i * 2200, y: 1500 }, rotation: 90, shape, width: 900 }) as Stair),
     );
     add(createElement('column', L.id, { position: { x: 5000, y: 6000 }, shape: 'round' }));

@@ -74,7 +74,7 @@ function solids(part: GeometryPart): { min: number[]; max: number[] }[] {
 }
 
 describe('stairs', () => {
-  const SHAPES: StairShape[] = ['straight', 'l-shape', 'u-shape', 'spiral'];
+  const SHAPES: StairShape[] = ['straight', 'l-shape', 'u-shape', 'open-well', 'spiral'];
   for (const shape of SHAPES) {
     for (const materialId of ['concrete', 'wood-oak', 'steel']) {
       it(`${shape} (${materialId}): solid treads at every tread top, landings, within the footprint`, () => {
@@ -114,7 +114,7 @@ describe('stairs', () => {
 
   it('stair layout flights cover every tread once, bottom to top, matching the tread polygons', () => {
     const { add } = testProject();
-    for (const shape of ['straight', 'l-shape', 'u-shape'] as const) {
+    for (const shape of ['straight', 'l-shape', 'u-shape', 'open-well'] as const) {
       for (const turn of ['left', 'right'] as const) {
         const st = add('stair', { position: { x: 500, y: -300 }, rotation: 120, width: 900, shape, turn });
         const layout = computeStairLayout(st, 3000);

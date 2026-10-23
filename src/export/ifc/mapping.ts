@@ -32,6 +32,8 @@ export function stairType(shape: StairShape): string {
       return 'STRAIGHT_RUN_STAIR';
     case 'l-shape':
       return 'QUARTER_TURN_STAIR';
+    case 'open-well':
+      return 'TWO_QUARTER_TURN_STAIR';
     case 'u-shape':
       return 'HALF_TURN_STAIR';
     case 'spiral':

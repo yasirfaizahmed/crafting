@@ -107,8 +107,47 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
     return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
   }
 
+  if (stair.shape === 'open-well' && T >= 5) {
+    // Three flights around an open well, with a corner landing at each turn (each counts as a tread level).
+    const n = T - 2;
+    const a = clampInt(stair.firstFlightTreads ?? Math.ceil(n / 3), 1, n - 2);
+    const b = clampInt(stair.secondFlightTreads ?? Math.ceil((n - a) / 2), 1, n - a - 1);
+    const c = n - a - b;
+    const side = stair.turn === 'left' ? 1 : -1;
+    const run1 = a * g;
+    for (let i = 0; i < a; i++) treads.push({ polygon: ccw(rect(i * g, (i + 1) * g, -w / 2, w / 2)), top: (i + 1) * rh });
+    footprint.push(ccw(rect(0, run1, -w / 2, w / 2)));
+    const flights = [flight(P(0, 0), f, 0, range(0, a))];
+    // First corner landing, then flight 2 across the head of the well (sideways, towards `side`).
+    const land1Top = (a + 1) * rh;
+    const landing1 = ccw(rect(run1, run1 + w, -w / 2, w / 2));
+    landings.push({ polygon: landing1, top: land1Top });
+    footprint.push(landing1);
+    const lat0 = (side * w) / 2;
+    for (let i = 0; i < b; i++) {
+      const l0 = lat0 + side * i * g;
+      const l1 = lat0 + side * (i + 1) * g;
+      treads.push({ polygon: ccw(rect(run1, run1 + w, Math.min(l0, l1), Math.max(l0, l1))), top: land1Top + (i + 1) * rh });
+    }
+    const latB = lat0 + side * b * g;
+    footprint.push(ccw(rect(run1, run1 + w, Math.min(lat0, latB), Math.max(lat0, latB))));
+    flights.push(flight(P(run1 + w / 2, lat0), scale(s, side), land1Top, range(a, a + b)));
+    // Second corner landing, then flight 3 back along the far side of the well.
+    const land2Top = land1Top + (b + 1) * rh;
+    const latC = latB + side * w;
+    const landing2 = ccw(rect(run1, run1 + w, Math.min(latB, latC), Math.max(latB, latC)));
+    landings.push({ polygon: landing2, top: land2Top });
+    footprint.push(landing2);
+    const off = side * (w + b * g);
+    for (let i = 0; i < c; i++) treads.push({ polygon: ccw(rect(run1 - (i + 1) * g, run1 - i * g, off - w / 2, off + w / 2)), top: land2Top + (i + 1) * rh });
+    footprint.push(ccw(rect(run1 - c * g, run1, off - w / 2, off + w / 2)));
+    flights.push(flight(P(run1, off), scale(f, -1), land2Top, range(a + b, a + b + c)));
+    walkline = [P(0, 0), P(run1 + w / 2, 0), P(run1 + w / 2, off), P(run1 - c * g, off)];
+    return { rise, riserCount, riserHeight: rh, treads, landings, walkline, footprint, flights };
+  }
+
   // Two flights with a landing that counts as one tread level.
-  const t1 = Math.min(T - 2, Math.max(1, Math.round(stair.firstFlightTreads ?? Math.ceil((T - 1) / 2))));
+  const t1 = clampInt(stair.firstFlightTreads ?? Math.ceil((T - 1) / 2), 1, T - 2);
   const t2 = T - 1 - t1;
   const landTop = (t1 + 1) * rh;
   const side = stair.turn === 'left' ? 1 : -1;
@@ -190,6 +229,7 @@ export function reverseStair(stair: Stair, levelHeight: number): Stair {
   const position = roundPoint(add(last.start, scale(last.direction, last.treadIndices.length * last.going)));
   const rotation = normDeg(angleDeg(scale(last.direction, -1)));
   if (flights.length === 1) return { ...stair, ...rails, position, rotation };
+  // The flights are walked in reverse order: the old last flight comes first (open-well keeps its middle flight).
   return {
     ...stair,
     ...rails,
@@ -197,6 +237,7 @@ export function reverseStair(stair: Stair, levelHeight: number): Stair {
     rotation,
     turn: stair.turn === 'left' ? 'right' : 'left',
     firstFlightTreads: last.treadIndices.length,
+    ...(flights.length === 3 ? { secondFlightTreads: flights[1].treadIndices.length } : {}),
   };
 }
 
@@ -211,6 +252,8 @@ const normDeg = (d: number): number => {
   const r = Math.round((((d % 360) + 360) % 360) * 1e6) / 1e6;
   return r === 360 ? 0 : r;
 };
+
+const clampInt = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, Math.round(v)));
 
 const roundPoint = (p: Vec2): Vec2 => ({ x: Math.round(p.x * 1000) / 1000, y: Math.round(p.y * 1000) / 1000 });
 

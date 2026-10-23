@@ -100,7 +100,7 @@ describe('renderPlan', () => {
     for (const kind of ['floor', 'ceiling', 'foundation', 'terrace'] as const)
       add(createElement('slab', L, { kind, outline: [{ x: 0, y: 10000 }, { x: 2000, y: 10000 }, { x: 2000, y: 12000 }, { x: 0, y: 12000 }], holes: [[{ x: 500, y: 10500 }, { x: 1000, y: 10500 }, { x: 1000, y: 11000 }, { x: 500, y: 11000 }]] }));
     for (const shape of ['gable', 'hip', 'shed', 'pyramid', 'flat'] as const) add(createElement('roof', L, { shape, outline: [{ x: 0, y: 0 }, { x: 8000, y: 0 }, { x: 8000, y: 5000 }, { x: 0, y: 5000 }] }));
-    for (const shape of ['straight', 'l-shape', 'u-shape', 'spiral'] as const) add(createElement('stair', L, { shape, position: { x: 5000 * ['straight', 'l-shape', 'u-shape', 'spiral'].indexOf(shape), y: 15000 } }));
+    for (const shape of ['straight', 'l-shape', 'u-shape', 'spiral', 'open-well'] as const) add(createElement('stair', L, { shape, position: { x: 5000 * ['straight', 'l-shape', 'u-shape', 'spiral', 'open-well'].indexOf(shape), y: 15000 } }));
     add(createElement('column', L, { shape: 'round', position: { x: 0, y: 20000 } }));
     add(createElement('beam', L, { start: { x: 0, y: 21000 }, end: { x: 5000, y: 21000 } }));
     add(createElement('railing', L, { path: [{ x: 0, y: 22000 }, { x: 3000, y: 22000 }, { x: 3000, y: 23000 }] }));

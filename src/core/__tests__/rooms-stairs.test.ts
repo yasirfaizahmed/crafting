@@ -64,7 +64,7 @@ describe('computeStairLayout', () => {
     expect(l.treads.at(-1)!.top).toBeCloseTo((3000 / 18) * 17);
     expect(l.walkline.at(-1)!.x).toBeCloseTo(17 * 280);
   });
-  for (const shape of ['l-shape', 'u-shape', 'spiral'] as const) {
+  for (const shape of ['l-shape', 'u-shape', 'open-well', 'spiral'] as const) {
     it(`lays out a ${shape} stair with monotonically rising treads`, () => {
       const l = computeStairLayout({ ...base, shape }, 3000);
       const tops = [...l.treads.map((t) => t.top), ...l.landings.map((t) => t.top)].sort((a, b) => a - b);

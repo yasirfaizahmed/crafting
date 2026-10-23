@@ -160,7 +160,7 @@ test('roofs, stairs and structure', async ({ page }) => {
       ridgeAngle: 0,
     });
   });
-  const stairs: StairShape[] = ['straight', 'l-shape', 'u-shape', 'spiral'];
+  const stairs: StairShape[] = ['straight', 'l-shape', 'u-shape', 'spiral', 'open-well'];
   stairs.forEach((shape, i) =>
     s.add('stair', { position: { x: i * 6000 + 1000, y: -16000 }, rotation: 90, width: 1000, shape, materialId: i % 2 ? 'concrete' : 'wood-oak' }),
   );
