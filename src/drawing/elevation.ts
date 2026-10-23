@@ -480,14 +480,17 @@ function groundLine(b: DrawingBuilder, project: Project, minU: number, maxU: num
   b.line('A-ELEV-OTLN', { x: minU - 4 * scale, y: g }, { x: maxU + 4 * scale, y: g }, { tag: 'ground-line' });
 }
 
-/** Earth hatch strip under the ground line; added first so cut foundations draw over it. */
-function groundHatch(b: DrawingBuilder, project: Project, proj: Projection, scale: number): void {
+/**
+ * Earth hatch strip under the ground line. Sections add it first (cut foundations draw over it);
+ * elevations add it last so it masks everything below ground.
+ */
+function groundHatch(b: DrawingBuilder, project: Project, proj: Projection, scale: number, layer: string): void {
   if (!Number.isFinite(proj.minU)) return;
   const g = Math.min(0, ...project.levels.map((l) => l.elevation));
   const x0 = proj.minU - 4 * scale;
   const x1 = proj.maxU + 4 * scale;
   const depth = Math.max(3 * scale, g - Math.min(proj.minV, g));
-  b.fill('A-ELEV', [{ x: x0, y: g }, { x: x1, y: g }, { x: x1, y: g - depth }, { x: x0, y: g - depth }], '#ffffff', {
+  b.fill(layer, [{ x: x0, y: g }, { x: x1, y: g }, { x: x1, y: g - depth }, { x: x0, y: g - depth }], '#ffffff', {
     hatch: 'earth',
     tag: 'ground-hatch',
     lineweight: PEN.extraFine,
@@ -515,8 +518,8 @@ export function generateElevationDrawing(project: Project, side: ElevationSide, 
   const b = new DrawingBuilder(scale, project.settings.units);
   const frame = viewFrame(SIDE_FORWARD[side]);
   const proj = project3(geometryFor(project, !!options.includeFurniture), project, frame, false);
-  groundHatch(b, project, proj, scale);
   emitFaces(b, proj.faces);
+  groundHatch(b, project, proj, scale, 'A-ELEV-OTLN');
   return finish(b, project, proj, scale, `${side.toUpperCase()} ELEVATION`, options);
 }
 
@@ -530,7 +533,7 @@ export function generateSectionDrawing(project: Project, cut: SectionCut, option
   const frame = viewFrame(forward, { x: cut.a.x, y: cut.a.y, z: 0 });
   frame.far = cut.depth;
   const proj = project3(geometryFor(project, !!options.includeFurniture), project, frame, true);
-  groundHatch(b, project, proj, scale);
+  groundHatch(b, project, proj, scale, 'A-ELEV');
   emitFaces(b, proj.faces);
   for (const c of proj.cuts) {
     const mat = getMaterial(c.materialId);
