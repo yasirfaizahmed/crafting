@@ -4,7 +4,7 @@
  * below the cut plane are drawn thin, walls above it hidden.
  */
 import { angleDeg } from '../../core/math2d';
-import { getMaterial } from '../../core/materials';
+import { materialFor } from '../../core/materials';
 import type { Opening, Vec2, Wall } from '../../core/types';
 import { openingInterval, pointAtOffset, wallCenterOffset, wallDirection, wallHeight, wallLength } from '../../core/walls';
 import { chainSegments, clipPolygonStrip, unionOutline, type UnionPolygon } from '../geom';
@@ -55,7 +55,7 @@ export function drawWalls(ctx: PlanContext): void {
     const isCut = wallIsCut(ctx, w);
     const hosted = openings.filter((o) => o.hostId === w.id && (!isCut || openingIsCut(ctx, w, o)));
     const pieces = wallPieces(ctx, w, isCut ? hosted : []);
-    if (getMaterial(w.materialId).category === 'glass') glass.push(...pieces);
+    if (materialFor(w).category === 'glass') glass.push(...pieces);
     else if (isCut) cutPieces.push(...pieces);
     else if (w.baseOffset + wallHeight(ctx.project, w) <= ctx.cut) lowPieces.push(...pieces);
     else highPieces.push(...pieces);
@@ -63,7 +63,7 @@ export function drawWalls(ctx: PlanContext): void {
 
   // Poché first (painter's order is per layer: A-WALL-PATT sits under A-WALL).
   for (const p of cutPieces) {
-    const mat = getMaterial(p.wall.materialId);
+    const mat = materialFor(p.wall);
     const angle = mat.hatch === 'wood' || mat.hatch === 'insulation' ? angleDeg(wallDirection(p.wall)) : 0;
     if (mat.hatch === 'none' || mat.hatch === 'solid') {
       b.fill('A-WALL-PATT', p.polygon, mat.hatch === 'solid' ? '#000000' : POCHE_GREY, { elementId: p.wall.id, tag: 'poche' });
@@ -74,7 +74,7 @@ export function drawWalls(ctx: PlanContext): void {
 
   const emit = (pieces: WallPiece[], extra: { lineweight?: number; linetype?: 'hidden'; tag: string }) => {
     if (!pieces.length) return;
-    const polys: UnionPolygon[] = pieces.map((p) => ({ polygon: p.polygon, key: `${getMaterial(p.wall.materialId).id}` }));
+    const polys: UnionPolygon[] = pieces.map((p) => ({ polygon: p.polygon, key: `${materialFor(p.wall).id}` }));
     const { outline, seams } = unionOutline(polys);
     for (const c of chainSegments(outline)) {
       b.polyline('A-WALL', c.points, c.closed, extra);

@@ -12,7 +12,8 @@ import { computeWallFootprints, wallLength } from '../core/walls';
 import { DrawingBuilder, drawingBounds } from './builder';
 import { chainSegments, unionOutline } from './geom';
 import { PLAN_LAYERS } from './layers';
-import { drawDimensionElement, drawExteriorChains, drawLabel, drawNorthArrow, drawRoomTag, drawViewTitle } from './plan/annotation';
+import { drawDimensionElement, drawExteriorChains, drawLabel, drawNorthArrow, drawOpeningTags, drawRoomTag, drawViewTitle } from './plan/annotation';
+import { openingMarks } from './schedules';
 import { mm, type PlanContext } from './plan/context';
 import { drawFurniture } from './plan/furniture';
 import { drawOpenings } from './plan/openings';
@@ -38,6 +39,8 @@ export interface PlanDrawingOptions {
   includeNorthArrow?: boolean;
   /** Plan cut plane height above the level, mm (default 1200). */
   cutHeight?: number;
+  /** Door / window tags with schedule marks (D01, W01…; default false). */
+  includeOpeningTags?: boolean;
 }
 
 export const DEFAULT_CUT_HEIGHT = 1200;
@@ -108,6 +111,7 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
   if (hasExtent && (options.includeGrid ?? columns.length >= 2) && columns.length) drawGrid(ctx, columns, buildingExtent);
 
   if (options.includeRoomTags !== false) for (const el of elements) if (el.type === 'room') drawRoomTag(ctx, el);
+  if (options.includeOpeningTags) drawOpeningTags(ctx, openingMarks(project));
   for (const el of elements) if (el.type === 'label') drawLabel(ctx, el);
   if (options.includeDimensions !== false) {
     for (const el of elements) if (el.type === 'dimension') drawDimensionElement(ctx, el);
@@ -118,7 +122,7 @@ export function generatePlanDrawing(project: Project, levelId: string, options: 
   const all = drawingBounds(b.entities(PLAN_LAYERS), scale, b.units);
   if (!isEmptyBounds(all)) {
     if (options.includeNorthArrow !== false) drawNorthArrow(ctx, { x: all.maxX + mm(ctx, 14), y: all.maxY - mm(ctx, 12) });
-    if (options.includeTitle !== false) drawViewTitle(ctx, planTitle(level), { x: all.minX, y: all.minY - mm(ctx, 12) }, true);
+    if (options.includeTitle !== false) drawViewTitle(b, scale, planTitle(level), { x: all.minX, y: all.minY - mm(ctx, 12) }, true);
   }
   return b.build(`${level.name || 'Level'} — Floor Plan`, PLAN_LAYERS);
 }
