@@ -7,7 +7,7 @@ import { add, distance, sub } from '../../core/math2d';
 import type { Door, Element, Label, Opening, Room, Vec2 } from '../../core/types';
 import { moveElements, type Patch, rotated, withInsertedVertex } from '../edit-ops';
 import type { Handle, OverlayItem } from '../editor-types';
-import { applyHandle, handlesFor, stairStretchLabel } from '../handles';
+import { applyHandle, handlesFor, sizeLabel, stairStretchLabel } from '../handles';
 import { elementsInBox } from '../shapes';
 import type { PlanTool, ToolHost, ToolPointer } from './types';
 
@@ -284,7 +284,7 @@ export class SelectTool implements PlanTool {
     }
     const items: OverlayItem[] = [];
     let target = e.world;
-    const stretching = h.kind.startsWith('stair-');
+    const stretching = h.kind.startsWith('stair-') || h.kind === 'size';
     if (h.kind !== 'rotate' && h.kind !== 'offset' && h.kind !== 'opening-a' && h.kind !== 'opening-b' && !stretching) {
       const exclude = new Set<string>([base.id]);
       let from: Vec2 | undefined;
@@ -307,6 +307,7 @@ export class SelectTool implements PlanTool {
     }
     this.patch = applyHandle(h, base, target, { elements: host.app.store.project.elements, freeAngle: e.shift, levelHeight: host.level.height });
     const after = this.patch.get(base.id);
+    if (after && h.kind === 'size') items.push({ t: 'tag', p: e.world, text: sizeLabel(after, (v) => host.fmt(v)), tone: 'accent' });
     if (after?.type === 'stair' && stretching) items.push({ t: 'tag', p: e.world, text: stairStretchLabel(h, after, host.level.height, (v) => host.fmt(v)), tone: 'accent' });
     if (after && h.kind === 'rotate' && 'rotation' in after) items.push({ t: 'tag', p: e.world, text: `${Math.round((after as { rotation: number }).rotation)}°`, tone: 'accent' });
     if (after && (after.type === 'door' || after.type === 'window') && (h.kind === 'opening-a' || h.kind === 'opening-b')) items.push({ t: 'tag', p: e.world, text: `Width ${host.fmt((after as Opening).width)}`, tone: 'accent' });

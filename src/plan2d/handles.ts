@@ -89,6 +89,8 @@ export function handlesFor(el: Element, ctx: HandleContext): Handle[] {
       return [...stairHandles(el, ctx), ...rotateHandle(el, ctx)];
     case 'furniture':
     case 'column':
+    case 'block':
+      return [...sizeHandles(el, ctx), ...rotateHandle(el, ctx)];
     case 'label':
     case 'block': {
       const rr = rotateRadius(el);
@@ -106,11 +108,91 @@ export function handlesFor(el: Element, ctx: HandleContext): Handle[] {
   }
 }
 
+/** Element frame for edge resizing: origin, unit axes and the edges' local coordinates. */
+interface SizeFrame {
+  origin: Vec2;
+  ux: Vec2;
+  uy: Vec2;
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+function sizeFrame(el: Element): SizeFrame | null {
+  if (el.type === 'block') {
+    const ux = dirFromDeg(el.rotation);
+    return { origin: { x: el.position.x, y: el.position.y }, ux, uy: perp(ux), x0: 0, x1: el.size.x, y0: 0, y1: el.size.y };
+  }
+  if (el.type === 'furniture' || el.type === 'column') {
+    const { w, d } = el.type === 'furniture' ? furnitureSize(el) : { w: el.width, d: el.shape === 'round' ? el.width : el.depth };
+    const ux = dirFromDeg(el.rotation);
+    return { origin: el.position, ux, uy: perp(ux), x0: -w / 2, x1: w / 2, y0: -d / 2, y1: d / 2 };
+  }
+  return null;
+}
+
+const SIZE_EDGES = [
+  { axis: 'x', end: 1 },
+  { axis: 'x', end: 0 },
+  { axis: 'y', end: 1 },
+  { axis: 'y', end: 0 },
+] as const;
+
+/** Edge handles: drag one edge, the opposite one stays put (round columns: one handle for the diameter). */
+function sizeHandles(el: Element, ctx: HandleContext): Handle[] {
+  const f = sizeFrame(el);
+  if (!f) return [];
+  const at = (x: number, y: number) => add(f.origin, add(scale(f.ux, x), scale(f.uy, y)));
+  const cx = (f.x0 + f.x1) / 2;
+  const cy = (f.y0 + f.y1) / 2;
+  if (Math.min(f.x1 - f.x0, f.y1 - f.y0) < ctx.px(12)) return [];
+  const edges = el.type === 'column' && el.shape === 'round' ? [0] : [0, 1, 2, 3];
+  return edges.map((i) => {
+    const e = SIZE_EDGES[i];
+    const p = e.axis === 'x' ? at(e.end ? f.x1 : f.x0, cy) : at(cx, e.end ? f.y1 : f.y0);
+    return H(el, 'size', p, 'square', i, e.axis === 'x' ? 'ew-resize' : 'ns-resize');
+  });
+}
+
+/** The element after dragging edge handle `index` to `target`. */
+export function resizeElement(el: Element, index: number, target: Vec2): Element | null {
+  const f = sizeFrame(el);
+  const e = SIZE_EDGES[index];
+  if (!f || !e) return null;
+  const v = dot(sub(target, f.origin), e.axis === 'x' ? f.ux : f.uy);
+  const lo = e.axis === 'x' ? f.x0 : f.y0;
+  const hi = e.axis === 'x' ? f.x1 : f.y1;
+  const min = el.type === 'block' ? 10 : 50;
+  // Sizes snap to whole centimetres; the opposite edge stays exactly where it was.
+  const size = Math.max(min, Math.round((e.end ? v - lo : hi - v) / 10) * 10);
+  const [n0, n1] = e.end ? [lo, lo + size] : [hi - size, hi];
+  const axis = e.axis === 'x' ? f.ux : f.uy;
+  if (el.type === 'block') {
+    const pos = add(f.origin, scale(axis, n0));
+    return { ...el, position: { ...el.position, x: pos.x, y: pos.y }, size: { ...el.size, [e.axis]: size } };
+  }
+  // Centred elements: the centre moves by half the change so the opposite edge stays.
+  const c = add(f.origin, scale(axis, (n0 + n1) / 2 - (lo + hi) / 2));
+  const position = { x: Math.round(c.x), y: Math.round(c.y) };
+  if (el.type === 'column') {
+    if (el.shape === 'round') return { ...el, width: size, depth: size };
+    return { ...el, position, ...(e.axis === 'x' ? { width: size } : { depth: size }) };
+  }
+  if (el.type === 'furniture') return { ...el, position, ...(e.axis === 'x' ? { width: size } : { depth: size }) };
+  return null;
+}
+
 function rotateHandle(el: Element, ctx: HandleContext): Handle[] {
   const rr = rotateRadius(el);
   if (!rr) return [];
+  let center = rr.center;
+  if (el.type === 'block') {
+    const o = blockOutline(el);
+    center = scale(add(o[0], o[2]), 0.5);
+  }
   const dir = dirFromDeg(rotation(el) + 90);
-  return [H(el, 'rotate', add(rr.center, scale(dir, rr.r + ctx.px(26))), 'circle', 0, 'grab')];
+  return [H(el, 'rotate', add(center, scale(dir, rr.r + ctx.px(26))), 'circle', 0, 'grab')];
 }
 
 /** Stretch handles of a straight-run stair: flight ends, flight sides, landing far edges, U-turn wells. */
@@ -174,6 +256,17 @@ export function stretchStair(h: Handle, st: Stair, target: Vec2, levelHeight: nu
       return null;
   }
   return { ...st, runs: next };
+}
+
+/** Live readout while resizing furniture, a column or a block. */
+export function sizeLabel(el: Element, fmt: (mm: number) => string): string {
+  if (el.type === 'block') return `${fmt(el.size.x)} × ${fmt(el.size.y)}`;
+  if (el.type === 'column') return el.shape === 'round' ? `Ø ${fmt(el.width)}` : `${fmt(el.width)} × ${fmt(el.depth)}`;
+  if (el.type === 'furniture') {
+    const s = furnitureSize(el);
+    return `${fmt(s.w)} × ${fmt(s.d)}`;
+  }
+  return '';
 }
 
 /** Live readout while stretching a stair. */
@@ -245,6 +338,11 @@ export function applyHandle(h: Handle, base: Element, target: Vec2, ctx: { eleme
         const pos = sub(center, r(half, next));
         set({ ...base, rotation: next, position: { ...base.position, x: pos.x, y: pos.y } });
       } else set({ ...base, rotation: next } as Element);
+      break;
+    }
+    case 'size': {
+      const out = resizeElement(base, h.index ?? 0, target);
+      if (out) set(out);
       break;
     }
     case 'stair-end':

@@ -43,7 +43,9 @@ export interface Handle {
     | 'stair-end'
     | 'stair-width'
     | 'stair-depth'
-    | 'stair-gap';
+    | 'stair-gap'
+    /** Furniture, columns and blocks: drag an edge (index 0..3 = +x, −x, +y, −y in the element's frame); the opposite edge stays. */
+    | 'size';
   p: Vec2;
   index?: number;
   shape: HandleShape;

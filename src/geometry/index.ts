@@ -12,6 +12,7 @@
  * stairs.ts, structure.ts (columns/beams), railings.ts, blocks.ts, furniture/*.ts. They share the
  * modelling DSL in model.ts and the 2D helpers in poly2d.ts.
  */
+import { hasMaterial } from '../core/materials';
 import type { Element, Project } from '../core/types';
 import { computeWallFootprints, type WallFootprint } from '../core/walls';
 import { buildBlock } from './blocks';
@@ -109,7 +110,14 @@ export function buildElementGeometry(ctx: GeometryContext, el: Element): Element
     out.lights = [];
   }
   out.parts = sanitize(out.parts);
+  const overrides = el.partMaterials;
+  if (overrides) out.parts = out.parts.map((p) => (overrides[partKey(p)] && hasMaterial(overrides[partKey(p)]) ? { ...p, materialId: overrides[partKey(p)] } : p));
   return out;
+}
+
+/** Key of a part for per-part material overrides (Element.partMaterials): its name, else its role. */
+export function partKey(p: Pick<GeometryPart, 'name' | 'role'>): string {
+  return p.name ?? p.role;
 }
 
 /** Build geometry for every element (optionally filtered), sharing one context. */

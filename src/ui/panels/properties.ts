@@ -14,6 +14,7 @@ import { elementIcon, elementName, elementDetail } from '../labels';
 import { levelsTopDown } from '../level-ops';
 import { materialLabel, materialSwatch, openFurniturePicker, openMaterialPicker } from '../pickers';
 import { TYPE_LABELS } from '../quantities';
+import { partsSection } from './parts';
 import { stairRunsSection } from './stair-runs';
 import {
   applyFieldEdit,
@@ -331,6 +332,14 @@ export function mountProperties(container: HTMLElement, shell: Shell): Propertie
         body.appendChild(runs.el);
         runs.update();
       }
+    }
+
+    // Every part of a single element's model can take its own material.
+    if (single && single.type !== 'room' && single.type !== 'dimension' && single.type !== 'label') {
+      const parts = partsSection(store, single.id, locked);
+      controls.push({ row: parts.el, update: parts.update });
+      body.appendChild(parts.el);
+      parts.update();
     }
 
     infoHost = h('div', { class: 'cr-prop-section is-info' });

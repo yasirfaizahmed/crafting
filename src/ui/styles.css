@@ -1288,3 +1288,4 @@ body { font: 400 13px/1.4 var(--cr-font); -webkit-font-smoothing: antialiased; f
 .cr-stair-runs-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .cr-stair-runs-hint { font-size: 11px; color: var(--cr-text-3); }
 .cr-btn.is-danger { color: var(--cr-danger); }
+.cr-parts .cr-prop-row.is-overridden .cr-prop-label { color: var(--cr-accent); }

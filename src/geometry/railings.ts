@@ -35,7 +35,7 @@ export function buildRailing(ctx: GeometryContext, r: Railing): GeometryPart[] {
   for (let i = 0; i + 1 < path.length; i++) {
     const a = path[i];
     const b = path[i + 1];
-    const n = Math.max(1, Math.ceil(distance(a, b) / MAX_POST_SPACING));
+    const n = Math.max(1, Math.ceil(distance(a, b) / Math.max(200, r.postSpacing ?? MAX_POST_SPACING)));
     const stations = Array.from({ length: n + 1 }, (_, k) => ({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n }));
     segments.push({ a, b, stations });
     for (const s of stations) if (!posts.some((p) => distance(p, s) < 1)) posts.push(s);
@@ -73,7 +73,7 @@ export function buildRailing(ctx: GeometryContext, r: Railing): GeometryPart[] {
       } else {
         // Bottom rail + balusters.
         m.bar(at(clear0, z + 100), at(clear1, z + 100), 40, 30);
-        const n = Math.max(1, Math.round((clear1 - clear0) / BALUSTER_SPACING));
+        const n = Math.max(1, Math.round((clear1 - clear0) / Math.max(40, r.balusterSpacing ?? BALUSTER_SPACING)));
         const step = (clear1 - clear0) / n;
         for (let i = 1; i < n; i++) {
           const t = clear0 + i * step;

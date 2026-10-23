@@ -78,6 +78,7 @@ export function buildDoor(ctx: GeometryContext, d: Door): GeometryPart[] {
   const frameMat = valid(d.frameMaterialId) ? d.frameMaterialId : metalFrame ? 'aluminium' : 'paint-white';
   const glassMat = isGlass(d.materialId) ? d.materialId : 'glass-clear';
   const leafMat = valid(d.materialId) ? d.materialId : d.style === 'garage' ? 'aluminium' : 'wood-oak';
+  const fw = Math.max(15, Math.min(d.frameWidth ?? FRAME, f.width / 4));
   switch (d.style) {
     case 'sliding':
       slidingDoor(f, frameMat, glassMat, d);
@@ -86,16 +87,16 @@ export function buildDoor(ctx: GeometryContext, d: Door): GeometryPart[] {
       garageDoor(f, frameMat, isGlass(leafMat) ? 'aluminium' : leafMat);
       break;
     case 'pocket':
-      lining(f, frameMat, true);
-      pocketLeaf(f, leafMat);
+      lining(f, frameMat, true, fw);
+      pocketLeaf(f, leafMat, fw, d.leaf, glassMat);
       break;
     case 'double':
-      lining(f, frameMat, true);
-      swingLeaves(f, d, leafMat, 2);
+      lining(f, frameMat, true, fw);
+      swingLeaves(f, d, leafMat, 2, fw, glassMat);
       break;
     default:
-      lining(f, frameMat, true);
-      swingLeaves(f, d, leafMat, 1);
+      lining(f, frameMat, true, fw);
+      swingLeaves(f, d, leafMat, 1, fw, glassMat);
   }
   return f.model.parts();
 }
@@ -126,14 +127,37 @@ function lining(f: OpeningFrame, mat: string, casings: boolean, fw = FRAME): voi
 }
 
 /** Raised panels on both faces of a leaf spanning x0..x1, y0..y1, z0..z1. */
-function leafWithPanels(m: Model, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, mat: string): void {
+function leafWithPanels(
+  m: Model,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+  z0: number,
+  z1: number,
+  mat: string,
+  style: Door['leaf'] = 'panelled',
+  glassMat = 'glass-clear',
+): void {
   if (isGlass(mat)) {
     m.use(mat, 'glass');
     m.box(x0, y0, z0, x1, y1, z1);
     return;
   }
+  if (style === 'glazed') {
+    glazedSash(m, x0, x1, y0, y1, z0, z1, mat, glassMat, 110, 200, 'panel');
+    return;
+  }
+  if (style === 'half-glazed') {
+    const zm = z0 + (z1 - z0) * 0.45;
+    m.use(mat, 'panel');
+    m.box(x0, y0, z0, x1, y1, zm);
+    glazedSash(m, x0, x1, y0, y1, zm, z1, mat, glassMat, 110, 60, 'panel');
+    return;
+  }
   m.use(mat, 'panel');
   m.box(x0, y0, z0, x1, y1, z1);
+  if (style === 'flush') return;
   const wdt = x1 - x0;
   const hgt = z1 - z0;
   const inset = Math.min(110, wdt * 0.18);
@@ -163,9 +187,9 @@ function leverHandle(m: Model, x: number, towards: number, y0: number, y1: numbe
 }
 
 /** Swing leaves (1 or 2) in the closed position, on the side they swing towards. */
-function swingLeaves(f: OpeningFrame, d: Door, mat: string, count: 1 | 2): void {
+function swingLeaves(f: OpeningFrame, d: Door, mat: string, count: 1 | 2, fw = FRAME, glassMat = 'glass-clear'): void {
   const m = f.model;
-  const W = f.width / 2 - FRAME;
+  const W = f.width / 2 - fw;
   const T = f.thickness / 2;
   const lt = Math.min(40, f.thickness * 0.6);
   const swing = d.flip ? -1 : 1; // leaf sits toward the side it opens to
@@ -173,8 +197,9 @@ function swingLeaves(f: OpeningFrame, d: Door, mat: string, count: 1 | 2): void 
   const yA = swing > 0 ? T - inset - lt : -T + inset;
   const yB = yA + lt;
   const z0 = 10;
-  const z1 = f.height - FRAME - 3;
+  const z1 = f.height - fw - 3;
   if (z1 - z0 < 100 || W < 50) return;
+  const open = Math.max(0, Math.min(170, d.openAngle ?? 0));
   const hingeSide = d.hinge === 'left' ? 1 : -1; // hinge 'left' (seen from the left side) is at +x
   const gap = 3;
   const leaves: { x0: number; x1: number; hinge: number }[] =
@@ -186,24 +211,27 @@ function swingLeaves(f: OpeningFrame, d: Door, mat: string, count: 1 | 2): void 
         ];
   const zh = Math.min(1000, z0 + (z1 - z0) * 0.48);
   for (const l of leaves) {
-    leafWithPanels(m, l.x0, l.x1, yA, yB, z0, z1, mat);
-    const handleX = l.hinge > 0 ? l.x0 + 65 : l.x1 - 65;
-    if (l.x1 - l.x0 > 250) leverHandle(m, handleX, l.hinge, yA, yB, zh);
-    // Hinge knuckles on the swing face at the hinge edge.
-    m.use(HANDLE_MAT, 'detail');
+    // Each leaf turns about its hinge (on the swing face) by the open angle, towards the swing side.
     const hx = l.hinge > 0 ? l.x1 : l.x0;
     const hy = swing > 0 ? yB : yA;
-    for (const z of [z0 + 200, (z0 + z1) / 2, z1 - 250]) m.cylinder(hx, hy, z, z + 100, 8, 8);
+    m.group(placement(hx, hy, 0, -l.hinge * swing * open), () => {
+      leafWithPanels(m, l.x0 - hx, l.x1 - hx, yA - hy, yB - hy, z0, z1, mat, d.leaf, glassMat);
+      const handleX = l.hinge > 0 ? l.x0 + 65 : l.x1 - 65;
+      if (l.x1 - l.x0 > 250) leverHandle(m, handleX - hx, l.hinge, yA - hy, yB - hy, zh);
+      // Hinge knuckles on the swing face at the hinge edge.
+      m.use(HANDLE_MAT, 'detail');
+      for (const z of [z0 + 200, (z0 + z1) / 2, z1 - 250]) m.cylinder(0, 0, z, z + 100, 8, 8);
+    });
   }
 }
 
-function pocketLeaf(f: OpeningFrame, mat: string): void {
+function pocketLeaf(f: OpeningFrame, mat: string, fw = FRAME, style: Door['leaf'] = 'panelled', glassMat = 'glass-clear'): void {
   const m = f.model;
-  const W = f.width / 2 - FRAME;
+  const W = f.width / 2 - fw;
   const lt = Math.min(40, f.thickness * 0.5);
-  const z1 = f.height - FRAME - 3;
+  const z1 = f.height - fw - 3;
   if (z1 < 150 || W < 50) return;
-  leafWithPanels(m, -W + 2, W - 2, -lt / 2, lt / 2, 10, z1, mat);
+  leafWithPanels(m, -W + 2, W - 2, -lt / 2, lt / 2, 10, z1, mat, style, glassMat);
   // Recessed flush pulls (shown as small plates) near the leading edge on both faces.
   m.use(HANDLE_MAT, 'detail');
   const x = W - 70;
@@ -225,10 +253,12 @@ function glazedSash(
   glassMat: string,
   stile: number,
   bottomRail = stile,
+  role: 'frame' | 'panel' = 'frame',
+  bars?: { x: number; y: number },
 ): void {
   const s = Math.min(stile, (x1 - x0) / 3, (z1 - z0) / 3);
   const br = Math.min(bottomRail, (z1 - z0) / 3);
-  m.use(frameMat, 'frame');
+  m.use(frameMat, role);
   m.box(x0, y0, z0, x0 + s, y1, z1);
   m.box(x1 - s, y0, z0, x1, y1, z1);
   m.box(x0 + s, y0, z0, x1 - s, y1, z0 + br);
@@ -237,6 +267,24 @@ function glazedSash(
   const gt = Math.min(10, (y1 - y0) * 0.5);
   m.use(glassMat, 'glass');
   m.box(x0 + s, gy - gt / 2, z0 + br, x1 - s, gy + gt / 2, z1 - s);
+  if (bars) glazingBars(m, x0 + s, x1 - s, z0 + br, z1 - s, y0, y1, bars, frameMat);
+}
+
+/** Glazing bars (muntins) dividing a pane into a grid, on both faces of the glass. */
+function glazingBars(m: Model, x0: number, x1: number, z0: number, z1: number, y0: number, y1: number, bars: { x: number; y: number }, mat: string): void {
+  const nx = Math.max(0, Math.min(12, Math.round(bars.x)));
+  const nz = Math.max(0, Math.min(12, Math.round(bars.y)));
+  if (!nx && !nz) return;
+  const b = 20;
+  m.use(mat, 'detail', 'glazing-bars');
+  for (let i = 1; i <= nx; i++) {
+    const x = x0 + ((x1 - x0) * i) / (nx + 1);
+    m.box(x - b / 2, y0, z0, x + b / 2, y1, z1);
+  }
+  for (let i = 1; i <= nz; i++) {
+    const z = z0 + ((z1 - z0) * i) / (nz + 1);
+    m.box(x0, y0, z - b / 2, x1, y1, z + b / 2);
+  }
 }
 
 function slidingDoor(f: OpeningFrame, frameMat: string, glassMat: string, d: Door): void {
@@ -322,6 +370,12 @@ function garageDoor(f: OpeningFrame, frameMat: string, panelMat: string): void {
 // Windows
 // -----------------------------------------------------------------------------
 
+/** Panes across: the requested count, else the automatic one, keeping every pane ≥ 150 mm wide. */
+function paneCount(requested: number | undefined, iw: number, fw: number, auto: number): number {
+  const max = Math.max(1, Math.floor((iw + fw) / (150 + fw)));
+  return Math.max(1, Math.min(max, Math.round(requested ?? auto)));
+}
+
 export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
   const f = openingFrame(ctx, win);
   if (!f) return [];
@@ -332,9 +386,13 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
   const H = f.height;
   const T = f.thickness / 2;
   const fd = Math.min(90, f.thickness);
-  const fy0 = -fd / 2;
-  const fy1 = fd / 2;
-  const fw = Math.min(60, f.width / 6, H / 6);
+  // Setback: the frame sits at the outer face, the centre or the inner face of the wall.
+  const shift = Math.max(0, T - fd / 2);
+  const oy = win.setback === 'outside' ? -f.interior * shift : win.setback === 'inside' ? f.interior * shift : 0;
+  const fy0 = -fd / 2 + oy;
+  const fy1 = fd / 2 + oy;
+  const fw = win.frameWidth !== undefined ? Math.max(15, Math.min(win.frameWidth, f.width / 4, H / 4)) : Math.min(60, f.width / 6, H / 6);
+  const bars = win.glazingBars;
 
   // Outer frame.
   m.use(frameMat, 'frame');
@@ -348,14 +406,14 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
   const iz1 = H - fw;
   const sd = Math.min(56, fd * 0.6);
   const sash = (x0: number, x1: number, z0: number, z1: number, y0 = -sd / 2, y1 = sd / 2) =>
-    glazedSash(m, x0, x1, y0, y1, z0, z1, frameMat, glassMat, Math.min(55, (x1 - x0) / 4));
+    glazedSash(m, x0, x1, y0 + oy, y1 + oy, z0, z1, frameMat, glassMat, Math.min(55, (x1 - x0) / 4), undefined, 'frame', bars);
   const mullion = (x: number) => {
     m.use(frameMat, 'frame');
     m.box(x - fw / 2, fy0, iz0, x + fw / 2, fy1, iz1);
   };
   const handle = (x: number, z: number) => {
     m.use(HANDLE_MAT, 'detail');
-    const yi = f.interior * (sd / 2);
+    const yi = f.interior * (sd / 2) + oy;
     m.box(x - 12, Math.min(yi, yi + f.interior * 30), z - 60, x + 12, Math.max(yi, yi + f.interior * 30), z + 60);
   };
 
@@ -363,12 +421,13 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
     const iw = ix1 - ix0;
     switch (win.style) {
       case 'fixed': {
-        const n = Math.max(1, Math.ceil(iw / 1200));
+        const n = paneCount(win.panes, iw, fw, Math.ceil(iw / 1200));
         const pw = (iw - (n - 1) * fw) / n;
         for (let i = 0; i < n; i++) {
           const x0 = ix0 + i * (pw + fw);
           m.use(glassMat, 'glass');
-          m.box(x0, -5, iz0, x0 + pw, 5, iz1);
+          m.box(x0, -5 + oy, iz0, x0 + pw, 5 + oy, iz1);
+          if (bars) glazingBars(m, x0, x0 + pw, iz0, iz1, -12 + oy, 12 + oy, bars, frameMat);
           if (i > 0) mullion(x0 - fw / 2);
         }
         break;
@@ -383,7 +442,7 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
         // Latch on the meeting stile of the interior-side sash.
         m.use(HANDLE_MAT, 'detail');
         const hx = f.interior > 0 ? ix0 + pw - 30 : ix1 - pw + 30;
-        const yi = f.interior * (g / 2 + half);
+        const yi = f.interior * (g / 2 + half) + oy;
         const zc = (iz0 + iz1) / 2;
         m.box(hx - 10, Math.min(yi, yi + f.interior * 25), zc - 50, hx + 10, Math.max(yi, yi + f.interior * 25), zc + 50);
         break;
@@ -396,7 +455,7 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
         sash(ix0, ix1, iz0, iz0 + ph, f.interior > 0 ? g / 2 : -g / 2 - half, f.interior > 0 ? g / 2 + half : -g / 2);
         sash(ix0, ix1, iz1 - ph, iz1, f.interior > 0 ? -g / 2 - half : g / 2, f.interior > 0 ? -g / 2 : g / 2 + half);
         m.use(HANDLE_MAT, 'detail');
-        const yi = f.interior * (g / 2 + half);
+        const yi = f.interior * (g / 2 + half) + oy;
         const zc = iz0 + ph - 30;
         m.box(-40, Math.min(yi, yi + f.interior * 18), zc - 10, 40, Math.max(yi, yi + f.interior * 18), zc + 10);
         break;
@@ -408,7 +467,7 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
       }
       default: {
         // Casement: one sash up to ~900 mm wide, otherwise two (or more) with mullions.
-        const n = Math.max(1, Math.round(iw / 800));
+        const n = paneCount(win.panes, iw, fw, Math.round(iw / 800));
         const pw = (iw - (n - 1) * fw) / n;
         for (let i = 0; i < n; i++) {
           const x0 = ix0 + i * (pw + fw);
@@ -427,7 +486,7 @@ export function buildWindow(ctx: GeometryContext, win: Window): GeometryPart[] {
     m.use(frameMat, 'frame');
     const s = f.interior;
     const inner = s > 0 ? fy1 : fy0;
-    const outer = -inner;
+    const outer = s > 0 ? fy0 : fy1;
     const ext = 40;
     const horn = (side: 'start' | 'end') => Math.min(40, side === 'start' ? f.marginStart : f.marginEnd);
     m.box(-W - horn('start'), Math.min(inner, s * (T + 25)), 0, W + horn('end'), Math.max(inner, s * (T + 25)), 25);

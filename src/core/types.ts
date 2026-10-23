@@ -71,6 +71,11 @@ export interface ElementBase {
   name?: string;
   /** Primary material (see core/materials.ts). Falls back to a per-type default. */
   materialId?: string;
+  /**
+   * Material overrides for individual parts of the element's 3D model, keyed by part name (or role
+   * for unnamed parts): e.g. a door's 'frame' / 'panel', a sofa's 'seat', a stair's 'handrail'.
+   */
+  partMaterials?: Record<string, string>;
   props?: Record<string, PropValue>;
   locked?: boolean;
   hidden?: boolean;
@@ -121,12 +126,26 @@ export interface Door extends HostedOpeningBase {
   /** true = door leaf swings to the wall's right side instead of the left side. */
   flip: boolean;
   frameMaterialId?: string;
+  /** Leaf design of swing and pocket doors. Default 'panelled'. */
+  leaf?: 'panelled' | 'flush' | 'glazed' | 'half-glazed';
+  /** How far swing leaves stand open in 3D, degrees (0 = closed). */
+  openAngle?: number;
+  /** Lining / casing width, mm (default 35). */
+  frameWidth?: number;
 }
 
 export interface Window extends HostedOpeningBase {
   type: 'window';
   style: WindowStyle;
   frameMaterialId?: string;
+  /** Sashes / panes across (casement and fixed windows). Undefined = by width. */
+  panes?: number;
+  /** Glazing bars per pane: vertical (x) and horizontal (y) bar counts. */
+  glazingBars?: { x: number; y: number };
+  /** Frame width, mm (default 60). */
+  frameWidth?: number;
+  /** Where the frame sits in the wall depth. Default 'center'. */
+  setback?: 'outside' | 'center' | 'inside';
 }
 
 export type Opening = Door | Window;
@@ -317,6 +336,10 @@ export interface Railing extends ElementBase {
   height: number;
   baseOffset: number;
   style: 'bars' | 'glass' | 'solid';
+  /** Centre-to-centre baluster spacing, mm (default 110). */
+  balusterSpacing?: number;
+  /** Maximum distance between posts, mm (default 1200). */
+  postSpacing?: number;
 }
 
 export interface Dimension extends ElementBase {
