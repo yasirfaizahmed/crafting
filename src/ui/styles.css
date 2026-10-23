@@ -1269,3 +1269,22 @@ body { font: 400 13px/1.4 var(--cr-font); -webkit-font-smoothing: antialiased; f
 @keyframes cr-spin { to { transform: rotate(360deg); } }
 @keyframes cr-slot-pop { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
 @keyframes cr-name-fade { 0% { opacity: 0; transform: translate(-50%, 4px); } 8% { opacity: 1; transform: translate(-50%, 0); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 0); } }
+
+/* Stair flights & landings editor */
+.cr-stair-runs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cr-stair-runs-head .cr-prop-section-title { margin: 0; }
+.cr-stair-runs-tag { font-size: 11px; color: var(--cr-text-3); border: 1px solid var(--cr-border-2, var(--cr-border)); border-radius: 999px; padding: 1px 8px; }
+.cr-stair-runs-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.cr-stair-flight, .cr-stair-landing { display: grid; grid-template-columns: 20px repeat(3, minmax(0, 1fr)); gap: 6px; align-items: end; }
+.cr-stair-landing { grid-template-columns: 20px minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)); padding-left: 0; }
+.cr-stair-flight { padding-top: 6px; border-top: 1px solid var(--cr-border); }
+.cr-stair-flight:first-child { border-top: 0; padding-top: 0; }
+.cr-stair-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 11px; color: var(--cr-text-3); }
+.cr-stair-field .cr-input, .cr-stair-field .cr-select { width: 100%; min-width: 0; height: 28px; font-size: 12px; }
+.cr-stair-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 28px; font-size: 11px; font-weight: 600; color: var(--cr-accent); }
+.cr-stair-badge.is-landing { color: var(--cr-text-3); }
+.cr-stair-actions { grid-column: 2 / -1; display: flex; gap: 6px; justify-content: flex-end; }
+.cr-stair-actions:empty { display: none; }
+.cr-stair-runs-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.cr-stair-runs-hint { font-size: 11px; color: var(--cr-text-3); }
+.cr-btn.is-danger { color: var(--cr-danger); }

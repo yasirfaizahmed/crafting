@@ -14,6 +14,7 @@ import { elementIcon, elementName, elementDetail } from '../labels';
 import { levelsTopDown } from '../level-ops';
 import { materialLabel, materialSwatch, openFurniturePicker, openMaterialPicker } from '../pickers';
 import { TYPE_LABELS } from '../quantities';
+import { stairRunsSection } from './stair-runs';
 import {
   applyFieldEdit,
   commonFields,
@@ -323,6 +324,13 @@ export function mountProperties(container: HTMLElement, shell: Shell): Propertie
         sec.appendChild(control.row);
       }
       body.appendChild(sec);
+      // A single straight-run stair gets the flight-by-flight editor right after its dimensions.
+      if (section === 'Dimensions' && single?.type === 'stair' && !(single.shape === 'spiral' && !single.runs)) {
+        const runs = stairRunsSection(store, single.id, units, locked);
+        controls.push({ row: runs.el, update: runs.update });
+        body.appendChild(runs.el);
+        runs.update();
+      }
     }
 
     infoHost = h('div', { class: 'cr-prop-section is-info' });

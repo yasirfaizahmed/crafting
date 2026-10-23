@@ -8,10 +8,10 @@
 import { getFurniture } from '../core/catalog';
 import { distance, polygonArea, polygonPerimeter } from '../core/math2d';
 import { DEFAULT_MATERIAL_FOR, getMaterial } from '../core/materials';
-import { computeStairLayout } from '../core/stairs';
+import { computeStairLayout, stairChecks } from '../core/stairs';
 import { slabHoles } from '../core/stairwells';
 import type { DocumentStore } from '../core/store';
-import type { Element, ElementOfType, ElementType, Project, UnitSystem, Vec2 } from '../core/types';
+import type { Element, ElementOfType, ElementType, Project, Stair, UnitSystem, Vec2 } from '../core/types';
 import { formatArea, formatLength, formatVolume, parseLength } from '../core/units';
 import { getLevel, openingFits, openingsOfWall, wallDirection, wallHeight, wallLength } from '../core/walls';
 import { displayAngle, displayLength, normalizeDeg, parseAngle, parseNumber } from './format';
@@ -20,8 +20,8 @@ import { columnVolume, elementVolume, slabArea, wallQuantity } from './quantitie
 
 export type FieldKind = 'length' | 'number' | 'angle' | 'select' | 'checkbox' | 'text' | 'textarea' | 'material' | 'furniture' | 'level';
 export type FieldValue = string | number | boolean | undefined;
-export type Section = 'Identity' | 'Dimensions' | 'Placement' | 'Appearance' | 'Options';
-export const SECTION_ORDER: Section[] = ['Identity', 'Dimensions', 'Placement', 'Appearance', 'Options'];
+export type Section = 'Identity' | 'Dimensions' | 'Placement' | 'Construction' | 'Appearance' | 'Options';
+export const SECTION_ORDER: Section[] = ['Identity', 'Dimensions', 'Placement', 'Construction', 'Appearance', 'Options'];
 
 export interface FieldOption {
   value: string;
@@ -239,10 +239,39 @@ export const ELEMENT_SCHEMAS: Record<ElementType, ElementSchema> = {
       kind: 'select',
       section: 'Identity',
       options: opts([['straight', 'Straight'], ['l-shape', 'L-shape (quarter landing)'], ['u-shape', 'U-shape (half landing)'], ['open-well', 'U-shape (3 flights, open well)'], ['spiral', 'Spiral']]),
+      hint: 'Choosing a shape resets the flights to that preset',
+      // A preset replaces any customised flights and tread split.
+      set: (_s, v) => ({ shape: v as Stair['shape'], runs: undefined, firstFlightTreads: undefined, secondFlightTreads: undefined }),
     },
-    { key: 'width', label: 'Width', kind: 'length', section: 'Dimensions', min: 300, step: 50 },
-    { key: 'tread', label: 'Going (tread)', kind: 'length', section: 'Dimensions', min: 150, max: 500, step: 5 },
-    { key: 'maxRiser', label: 'Max riser height', kind: 'length', section: 'Dimensions', min: 100, max: 250, step: 5 },
+    {
+      key: 'width',
+      label: 'Width (all flights)',
+      kind: 'length',
+      section: 'Dimensions',
+      min: 300,
+      step: 50,
+      set: (s, v) => ({ width: Number(v), runs: s.runs ? { ...s.runs, flights: s.runs.flights.map((f) => ({ ...f, width: undefined })) } : undefined }),
+    },
+    {
+      key: 'tread',
+      label: 'Going (all flights)',
+      kind: 'length',
+      section: 'Dimensions',
+      min: 150,
+      max: 500,
+      step: 5,
+      set: (s, v) => ({ tread: Number(v), runs: s.runs ? { ...s.runs, flights: s.runs.flights.map((f) => ({ ...f, going: undefined })) } : undefined }),
+    },
+    {
+      key: 'maxRiser',
+      label: 'Max riser height',
+      kind: 'length',
+      section: 'Dimensions',
+      min: 100,
+      max: 250,
+      step: 5,
+      hint: 'Presets add risers to stay under it; custom flights are checked against it',
+    },
     {
       key: 'rise',
       label: 'Total rise',
@@ -254,33 +283,40 @@ export const ELEMENT_SCHEMAS: Record<ElementType, ElementSchema> = {
       placeholder: (s, p, u) => `Level · ${formatLength(levelHeightOf(p, s), u)}`,
     },
     { key: 'innerRadius', label: 'Centre column radius', kind: 'length', section: 'Dimensions', min: 0, step: 10, optional: true, placeholder: () => '100 mm', visible: (s) => s.shape === 'spiral' },
-    {
-      key: 'firstFlightTreads',
-      label: 'Treads before landing',
-      kind: 'number',
-      section: 'Dimensions',
-      min: 1,
-      step: 1,
-      optional: true,
-      placeholder: (s, p) => `Auto · ${computeStairLayout(s, levelHeightOf(p, s)).flights?.[0]?.treadIndices.length ?? '—'}`,
-      visible: (s) => s.shape === 'l-shape' || s.shape === 'u-shape' || s.shape === 'open-well',
-    },
-    {
-      key: 'secondFlightTreads',
-      label: 'Treads in middle flight',
-      kind: 'number',
-      section: 'Dimensions',
-      min: 1,
-      step: 1,
-      optional: true,
-      hint: 'Sets the width of the open well',
-      placeholder: (s, p) => `Auto · ${computeStairLayout(s, levelHeightOf(p, s)).flights?.[1]?.treadIndices.length ?? '—'}`,
-      visible: (s) => s.shape === 'open-well',
-    },
-    { key: 'turn', label: 'Turn', kind: 'select', section: 'Placement', options: opts([['left', 'Left'], ['right', 'Right']]), visible: (s) => s.shape !== 'straight' },
+    { key: 'turn', label: 'Turn', kind: 'select', section: 'Placement', options: opts([['left', 'Left'], ['right', 'Right']]), visible: (s) => s.shape !== 'straight' && !s.runs },
     rotationField('Direction (up)') as FieldDef<ElementOfType<'stair'>>,
     axisField('position', 'x', 'X'),
     axisField('position', 'y', 'Y'),
+    {
+      key: 'structure',
+      label: 'Structure',
+      kind: 'select',
+      section: 'Construction',
+      options: opts([['auto', 'Auto (by material)'], ['solid', 'Solid (cast / masonry)'], ['stringers', 'Stringers + treads']]),
+      get: (s) => s.structure ?? 'auto',
+    },
+    {
+      key: 'risers',
+      label: 'Risers',
+      kind: 'select',
+      section: 'Construction',
+      options: opts([['auto', 'Auto (closed wood, open metal)'], ['closed', 'Closed'], ['open', 'Open']]),
+      get: (s) => s.risers ?? 'auto',
+    },
+    { key: 'nosing', label: 'Nosing', kind: 'length', section: 'Construction', min: 0, max: 60, step: 5, optional: true, placeholder: () => '25 mm' },
+    { key: 'treadThickness', label: 'Tread thickness', kind: 'length', section: 'Construction', min: 10, max: 120, step: 5, optional: true, placeholder: () => '40 mm' },
+    { key: 'stringerThickness', label: 'Stringer thickness', kind: 'length', section: 'Construction', min: 10, max: 120, step: 5, optional: true, placeholder: () => '45 mm' },
+    { key: 'landingThickness', label: 'Landing thickness', kind: 'length', section: 'Construction', min: 20, max: 500, step: 10, optional: true, placeholder: () => 'Auto' },
+    {
+      key: 'handrails',
+      label: 'Handrails',
+      kind: 'select',
+      section: 'Construction',
+      options: opts([['both', 'Both sides'], ['left', 'Left only'], ['right', 'Right only'], ['none', 'None']]),
+      get: (s) => s.handrails ?? (typeof s.props?.handrail === 'string' ? s.props.handrail : 'both'),
+    },
+    { key: 'railHeight', label: 'Handrail height', kind: 'length', section: 'Construction', min: 300, max: 1500, step: 10, optional: true, placeholder: () => '900 mm' },
+    { key: 'balusterSpacing', label: 'Baluster gap', kind: 'length', section: 'Construction', min: 30, max: 400, step: 5, optional: true, placeholder: () => '110 mm', hint: 'Clear gap between balusters (≤ 100 mm where children use the stair)' },
     materialField() as FieldDef<ElementOfType<'stair'>>,
   ]),
   column: typed('column', 'Column', [
@@ -552,18 +588,19 @@ export function computedInfo(el: Element, project: ProjectView, units: UnitSyste
         { label: 'Eave perimeter', value: L(polygonPerimeter(el.outline)) },
       ];
     case 'stair': {
-      const lay = computeStairLayout(el, levelHeightOf(project, el));
-      const pitch = (Math.atan2(lay.riserHeight, el.tread) * 180) / Math.PI;
-      const blondel = 2 * lay.riserHeight + el.tread;
-      const ok = blondel >= 550 && blondel <= 700;
-      return [
+      const height = levelHeightOf(project, el);
+      const lay = computeStairLayout(el, height);
+      const goings = lay.runs?.flights.map((f) => f.going) ?? [el.tread];
+      const pitch = (Math.atan2(lay.riserHeight, Math.min(...goings)) * 180) / Math.PI;
+      const rows: InfoRow[] = [
         { label: 'Risers', value: `${lay.riserCount} × ${L(lay.riserHeight)}` },
-        { label: 'Treads', value: `${lay.treads.length} × ${L(el.tread)}` },
+        { label: 'Treads', value: lay.runs ? `${lay.runs.flights.map((f) => f.treads).join(' + ')} (${lay.treads.length})` : String(lay.treads.length) },
         { label: 'Landings', value: String(lay.landings.length) },
         { label: 'Total rise', value: L(lay.rise) },
-        { label: 'Pitch', value: `${pitch.toFixed(1)}°`, tone: pitch <= 42 ? 'ok' : 'warn' },
-        { label: '2R + G', value: `${Math.round(blondel)} mm`, tone: ok ? 'ok' : 'warn', hint: 'Comfort rule: 550–700 mm (Blondel)' },
+        { label: 'Pitch', value: `${pitch.toFixed(1)}°`, tone: pitch <= 42 ? 'ok' : 'warn', hint: '≤ 42° for private stairs' },
       ];
+      for (const c of stairChecks(el, height)) rows.push({ label: c.label, value: c.value, tone: c.ok ? 'ok' : 'warn', hint: c.rule });
+      return rows;
     }
     case 'column':
       return [
