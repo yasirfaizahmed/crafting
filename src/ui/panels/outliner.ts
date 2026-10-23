@@ -173,6 +173,7 @@ export function mountOutliner(container: HTMLElement, shell: Shell): OutlinerHan
           h('span', { class: 'cr-ol-flags' }, lock, eye),
         );
         row.addEventListener('click', (e) => onRowClick(e, item.id, ordered));
+        row.addEventListener('dblclick', () => shell.showTab('properties'));
         row.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

@@ -39,12 +39,15 @@ export function clampSplit(r: number): number {
   return Number.isFinite(r) ? Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, r)) : 0.5;
 }
 
-/** Sidebars start closed on narrow screens unless the user opened them before. */
+/**
+ * Sidebars start closed on narrow screens unless the user opened them before. The inspector
+ * (right) docks by default only on wide screens so the split plan + 3D views keep room to work.
+ */
 function initialSidebar(side: SidebarSide): boolean {
   const saved = prefs.get<boolean | null>(`sidebar.${side}`, null);
   if (saved !== null) return saved;
   const w = typeof window !== 'undefined' ? window.innerWidth || 1440 : 1440;
-  return side === 'left' ? w >= 900 : w >= 1100;
+  return side === 'left' ? w >= 900 : w >= 1600;
 }
 
 export function createLayout(root: HTMLElement): Layout {

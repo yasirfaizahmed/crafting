@@ -211,6 +211,23 @@ body { font: 400 13px/1.4 var(--cr-font); -webkit-font-smoothing: antialiased; f
 .cr-primary-btn { background: var(--cr-accent); color: #fff; font-weight: 600; }
 .cr-primary-btn:hover:not(:disabled) { background: var(--cr-accent-hi); color: #fff; }
 .cr-inventory-btn { color: var(--cr-text); }
+.cr-panel-toggle { position: relative; }
+.cr-panel-toggle.has-badge::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid var(--cr-surface);
+  border-radius: 9px;
+  background: var(--cr-accent);
+  color: #fff;
+  font: 700 9.5px/12px var(--cr-font);
+  text-align: center;
+  animation: cr-pop 0.15s ease-out;
+}
 
 .cr-seg { flex: none; display: inline-flex; padding: 2px; gap: 2px; background: #0f1114; border: 1px solid var(--cr-border); border-radius: 8px; }
 .cr-seg-btn {
