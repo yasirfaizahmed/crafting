@@ -86,4 +86,27 @@ describe('landing guard rails', () => {
     for (const part of posts) for (let i = 1; i < part.mesh.positions.length; i += 3) zs.push(part.mesh.positions[i] * 1000);
     expect(zs.some((z) => Math.abs(z - landing.top) < 1)).toBe(true);
   });
+
+  it('follows stretched landings: open pieces of every edge are guarded, joins with flights are not', () => {
+    const { add } = testProject();
+    const make = (landing: StairRuns['landings'][number]) =>
+      computeStairLayout(add('stair', { runs: { flights: [{ treads: 7 }, { treads: 8 }], landings: [landing] }, position: { x: 0, y: 0 }, rotation: 0 }) as Stair, 3000);
+    // Quarter turn left with a wider outside: far edge, outer side and the new strip of back edge.
+    const outer = landingGuardEdges(make({ turn: 'left', angle: 90, extendRight: 400 }), 0);
+    expect(outer).toHaveLength(3);
+    expect(outer.every((e) => e.side === 'right')).toBe(true);
+    const len = (e: { a: { x: number; y: number }; b: { x: number; y: number } }) => Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y);
+    expect(outer.map(len).sort((a, b) => a - b)).toEqual([400, 1000, 1400]);
+    // Walking further before the turn: the strip of back edge on the inside is guarded on the inside.
+    const run = landingGuardEdges(make({ turn: 'left', angle: 90, extendLeft: 500 }), 0);
+    expect(run.filter((e) => e.side === 'left').map(len)).toEqual([500]);
+    // Platform past the next flight: its piece of the turning edge belongs to the outside.
+    const past = landingGuardEdges(make({ turn: 'left', angle: 90, beyond: 300 }), 0);
+    expect(past.every((e) => e.side === 'right')).toBe(true);
+    expect(past.map(len).sort((a, b) => a - b)).toEqual([300, 1000, 1300]);
+    // A wider straight landing guards the strips of its back and far edges beside the flights.
+    const wide = landingGuardEdges(make({ turn: 'none', extendLeft: 200, extendRight: 300 }), 0);
+    expect(wide.filter((e) => e.side === 'left').map(len).sort((a, b) => a - b)).toEqual([200, 200, 1000]);
+    expect(wide.filter((e) => e.side === 'right').map(len).sort((a, b) => a - b)).toEqual([300, 300, 1000]);
+  });
 });

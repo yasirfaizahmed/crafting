@@ -13,7 +13,7 @@
  */
 import { add, angleDeg, dirFromDeg, normalize, perp, scale, sub } from '../core/math2d';
 import { getMaterial, materialFor } from '../core/materials';
-import { computeStairLayout, type StairFlight, type StairLayout } from '../core/stairs';
+import { computeStairLayout, landingFrame, type StairFlight, type StairLayout } from '../core/stairs';
 import type { Stair, Vec2 } from '../core/types';
 import { levelElevation, levelHeight } from './cache';
 import { Model, placement, type P3 } from './model';
@@ -217,8 +217,9 @@ interface GuardEdge {
 }
 
 /**
- * Open edges of landing `i` that need a guard: the sides of straight landings, the outside of a
- * turn, the unused part of a quarter landing's inside edge and the well of a half turn.
+ * Open edges of landing `i` that need a guard: every edge of the platform except where a flight
+ * meets it. Pieces on the inside of a turn (the unused stretch before a quarter turn's next flight,
+ * the well of a half turn) follow the inside handrail setting; the rest the outside one.
  */
 export function landingGuardEdges(layout: StairLayout, i: number): GuardEdge[] {
   const runs = layout.runs;
@@ -227,35 +228,55 @@ export function landingGuardEdges(layout: StairLayout, i: number): GuardEdge[] {
   const spec = runs.landings[i];
   const wIn = runs.flights[i].width;
   const wOut = runs.flights[i + 1]?.width ?? wIn;
+  const fr = landingFrame(spec, wIn, wOut);
   const d = fin.direction;
   const left = perp(d);
   const E = add(fin.start, scale(d, fin.treadIndices.length * fin.going));
   const at = (f: number, l: number): Vec2 => add(E, add(scale(d, f), scale(left, l)));
-  const D = spec.depth;
+  const { depth: D, right: R, left: L, next } = fr;
+  const s = spec.turn === 'left' ? 1 : spec.turn === 'right' ? -1 : 0;
+  const quarter = s !== 0 && spec.angle === 90;
+  const half = s !== 0 && spec.angle === 180;
+  // Where flights meet the platform, per edge (intervals of l on the back / far edge, of f on the sides).
+  const nextSpan: [number, number] = [next.l - wOut / 2, next.l + wOut / 2];
+  const back: [number, number][] = [[-wIn / 2, wIn / 2], ...(half ? [nextSpan] : [])];
+  const far: [number, number][] = s === 0 ? [nextSpan] : [];
+  const turnEdge: [number, number][] = quarter ? [[next.f - wOut / 2, next.f + wOut / 2]] : [];
+  const sideOf = (inside: boolean, lateral: number): GuardEdge['side'] =>
+    s === 0 ? (lateral > 0 ? 'left' : 'right') : inside === s > 0 ? 'left' : 'right';
   const out: GuardEdge[] = [];
-  if (spec.turn === 'none') {
-    const h = Math.max(wIn, wOut) / 2;
-    out.push({ a: at(0, h), b: at(D, h), side: 'left' }, { a: at(0, -h), b: at(D, -h), side: 'right' });
-    return out;
+  for (const [a, b] of uncovered([R, L], back)) {
+    const m = (a + b) / 2;
+    // Inside a turn: the half turn's well, or a quarter landing's back edge on the turn side.
+    const inside = half ? m * s > wIn / 2 && m * s < Math.abs(next.l) : quarter && m * s > 0;
+    out.push({ a: at(0, a), b: at(0, b), side: sideOf(inside, m) });
   }
-  const s = spec.turn === 'left' ? 1 : -1;
-  const outside: GuardEdge['side'] = s > 0 ? 'right' : 'left';
-  const inside: GuardEdge['side'] = s > 0 ? 'left' : 'right';
-  if (spec.angle === 90) {
-    out.push({ a: at(D, -wIn / 2), b: at(D, wIn / 2), side: outside }, { a: at(0, (-s * wIn) / 2), b: at(D, (-s * wIn) / 2), side: outside });
-    if (D - wOut > 1) out.push({ a: at(0, (s * wIn) / 2), b: at(D - wOut, (s * wIn) / 2), side: inside });
-    return out;
+  for (const [a, b] of uncovered([R, L], far)) out.push({ a: at(D, a), b: at(D, b), side: sideOf(false, (a + b) / 2) });
+  for (const l of [L, R]) {
+    const turnSide = quarter && l * s > 0;
+    for (const [a, b] of uncovered([0, D], turnSide ? turnEdge : [])) {
+      // Before the next flight is inside the turn; past it, outside.
+      out.push({ a: at(a, l), b: at(b, l), side: sideOf(turnSide && b <= next.f, l) });
+    }
   }
-  const off = s * (wIn / 2 + spec.gap + wOut / 2);
-  const l0 = (-s * wIn) / 2;
-  const l1 = off + (s * wOut) / 2;
-  out.push(
-    { a: at(D, l0), b: at(D, l1), side: outside },
-    { a: at(0, l0), b: at(D, l0), side: outside },
-    { a: at(0, l1), b: at(D, l1), side: outside },
-  );
-  if (spec.gap > 1) out.push({ a: at(0, (s * wIn) / 2), b: at(0, s * (wIn / 2 + spec.gap)), side: inside });
   return out;
+}
+
+/** Parts of the interval `span` not covered by any of `cuts` (pieces shorter than 1 mm dropped). */
+function uncovered(span: [number, number], cuts: [number, number][]): [number, number][] {
+  let pieces: [number, number][] = [span];
+  for (const [c0, c1] of cuts) {
+    const nextPieces: [number, number][] = [];
+    for (const [a, b] of pieces) {
+      if (c1 <= a || c0 >= b) nextPieces.push([a, b]);
+      else {
+        if (c0 > a) nextPieces.push([a, c0]);
+        if (c1 < b) nextPieces.push([c1, b]);
+      }
+    }
+    pieces = nextPieces;
+  }
+  return pieces.filter(([a, b]) => b - a > 1);
 }
 
 /** Unit normal of the edge pointing into the landing. */

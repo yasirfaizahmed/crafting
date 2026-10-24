@@ -404,6 +404,18 @@ function labelForHandle(h: Handle): string {
       return 'Resize opening';
     case 'offset':
       return 'Move dimension line';
+    case 'stair-end':
+      return 'Change flight steps';
+    case 'stair-width':
+      return 'Change flight width';
+    case 'stair-depth':
+    case 'stair-left':
+    case 'stair-right':
+      return 'Stretch landing';
+    case 'stair-beyond':
+      return 'Slide flight along landing';
+    case 'stair-gap':
+      return 'Change stair well';
     default:
       return 'Edit shape';
   }

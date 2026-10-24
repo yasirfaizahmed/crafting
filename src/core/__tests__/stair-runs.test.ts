@@ -111,7 +111,7 @@ describe('custom stair runs', () => {
 
   it('fills defaults when resolving', () => {
     const r = resolveStairRuns(make({ flights: [{ treads: 4 }, { treads: 4 }], landings: [] }), H)!;
-    expect(r.landings).toEqual([{ turn: 'none', angle: 90, depth: 1000, gap: 100 }]);
+    expect(r.landings).toEqual([{ turn: 'none', angle: 90, depth: 1000, gap: 100, extendLeft: 0, extendRight: 0, beyond: 0 }]);
   });
 });
 

@@ -1,7 +1,8 @@
 /**
  * "Flights & landings" editor for a selected stair: every flight's steps, going and width, every
- * landing's turn, depth and well gap, plus split / add / remove flights and reset to the preset.
- * The first edit of a preset stair turns it into a custom one (stair.runs).
+ * landing's turn, depth, well gap and extra platform on each side (and past the next flight on
+ * quarter turns), plus split / add / remove flights and reset to the preset. The first edit of a
+ * preset stair turns it into a custom one (stair.runs).
  */
 import { editableRuns, resolveStairRuns } from '../../core/stairs';
 import type { DocumentStore } from '../../core/store';
@@ -52,7 +53,13 @@ export function removeFlight(runs: StairRuns, i: number): StairRuns {
 /** Append a landing (turning like the previous one, or straight) and a short flight. */
 export function addFlight(runs: StairRuns): StairRuns {
   const prev = runs.landings[runs.landings.length - 1];
-  return { flights: [...runs.flights, { treads: 3 }], landings: [...runs.landings, prev ? { ...prev, depth: undefined } : { turn: 'none' }] };
+  const landing: StairLandingSpec = prev ? { turn: prev.turn, ...(prev.angle ? { angle: prev.angle } : {}), ...(prev.gap !== undefined ? { gap: prev.gap } : {}) } : { turn: 'none' };
+  return { flights: [...runs.flights, { treads: 3 }], landings: [...runs.landings, landing] };
+}
+
+/** Runs with landing `i` patched. */
+function patchLanding(r: StairRuns, i: number, patch: Partial<StairLandingSpec>): StairRuns {
+  return { ...r, landings: r.landings.map((x, k) => (k === i ? { ...x, ...patch } : x)) };
 }
 
 export interface StairRunsSection {
@@ -75,8 +82,8 @@ export function stairRunsSection(store: DocumentStore, stairId: string, units: (
     store.update<Stair>(s.id, { runs: edit(runs) }, label);
   };
 
-  const lengthInput = (value: number | undefined, placeholder: number, onCommit: (v: number | undefined) => void, min: number) => {
-    const input = h('input', { class: 'cr-input is-num', type: 'text', inputmode: 'decimal', disabled, placeholder: formatLength(placeholder, units()), 'aria-label': 'length' });
+  const lengthInput = (value: number | undefined, placeholder: number, onCommit: (v: number | undefined) => void, min: number, label = 'length') => {
+    const input = h('input', { class: 'cr-input is-num', type: 'text', inputmode: 'decimal', disabled, placeholder: formatLength(placeholder, units()), 'aria-label': label });
     input.value = value === undefined ? '' : formatLength(value, units());
     const done = () => {
       const t = input.value.trim();
@@ -189,6 +196,48 @@ export function stairRunsSection(store: DocumentStore, stairId: string, units: (
           : null,
       ];
       list.appendChild(h('div', { class: 'cr-stair-landing' }, ...fields));
+      // Extra platform on either side; on a quarter turn's turning side it is the walk before the next flight.
+      const quarter = landing.turn !== 'none' && landing.angle === 90;
+      const sideTitle = (side: 'left' | 'right') =>
+        quarter && landing.turn === side
+          ? 'Walk further before the next flight: the landing gets longer and the next flight moves out with this edge'
+          : `Extra platform beyond the flights on the ${side} (looking up the stair)`;
+      const extra = (side: 'left' | 'right') => {
+        const key = side === 'left' ? 'extendLeft' : 'extendRight';
+        return h(
+          'label',
+          { class: 'cr-stair-field', title: sideTitle(side) },
+          h('span', null, side === 'left' ? 'Extra left' : 'Extra right'),
+          lengthInput(lspec?.[key], 0, (v) => commit('Stretch landing', (r) => patchLanding(r, i, { [key]: v })), 0, `Landing ${i + 1} extra ${side}`),
+        );
+      };
+      list.appendChild(
+        h(
+          'div',
+          { class: 'cr-stair-landing-extra' },
+          h('span', null),
+          extra('left'),
+          extra('right'),
+          quarter
+            ? h(
+                'label',
+                { class: 'cr-stair-field', title: 'Landing continuing past the far side of the next flight (the next flight stays where it is)' },
+                h('span', null, 'Past flight'),
+                lengthInput(
+                  lspec?.beyond,
+                  0,
+                  (v) =>
+                    commit('Stretch landing', (r) =>
+                      // Keep the next flight in place: an explicit depth grows by the same amount.
+                      patchLanding(r, i, lspec?.depth === undefined ? { beyond: v } : { beyond: v, depth: landing.depth + (v ?? 0) - landing.beyond }),
+                    ),
+                  0,
+                  `Landing ${i + 1} past next flight`,
+                ),
+              )
+            : null,
+        ),
+      );
     });
     el.appendChild(list);
     el.appendChild(
@@ -196,7 +245,7 @@ export function stairRunsSection(store: DocumentStore, stairId: string, units: (
         'div',
         { class: 'cr-stair-runs-foot' },
         button('+ Add flight', 'Add a landing and another flight at the top', () => commit('Add flight', addFlight)),
-        h('span', { class: 'cr-stair-runs-hint' }, 'Empty fields follow the stair’s width and going'),
+        h('span', { class: 'cr-stair-runs-hint' }, 'Empty fields follow the stair’s width and going · drag any landing edge in the plan'),
       ),
     );
   }

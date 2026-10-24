@@ -3,8 +3,8 @@
  * symbols), plan editor, IFC export and 3D walk collision.
  *
  * A stair is a chain of straight flights joined by landings (`StairRuns`): each flight has its own
- * tread count, going and width; each landing its own turn (straight / quarter / half), depth and
- * well gap. The `shape` presets (straight, L, U, open-well) are just generators of such a chain;
+ * tread count, going and width; each landing its own turn (straight / quarter / half), depth, well
+ * gap and extra platform on either side (and past the next flight on quarter turns). The `shape` presets (straight, L, U, open-well) are just generators of such a chain;
  * `stair.runs` overrides them with a fully custom one. Spirals are laid out separately.
  *
  * Conventions: `position` is the centre of the bottom edge of the first tread; `rotation` is the
@@ -104,8 +104,50 @@ export function resolveStairRuns(stair: Stair, levelHeight: number): ResolvedRun
 
 function resolveLanding(l: StairLandingSpec, wIn: number, wOut: number): Required<StairLandingSpec> {
   const angle = l.angle === 180 ? 180 : 90;
-  const auto = l.turn === 'none' ? wIn : angle === 90 ? wOut : Math.max(wIn, wOut);
-  return { turn: l.turn, angle, depth: Math.max(1, l.depth ?? auto), gap: Math.max(0, l.gap ?? U_STAIR_GAP) };
+  const beyond = l.turn !== 'none' && angle === 90 ? Math.max(0, l.beyond ?? 0) : 0;
+  const auto = l.turn === 'none' ? wIn : angle === 90 ? wOut + beyond : Math.max(wIn, wOut);
+  return {
+    turn: l.turn,
+    angle,
+    depth: Math.max(1, l.depth ?? auto),
+    gap: Math.max(0, l.gap ?? U_STAIR_GAP),
+    extendLeft: Math.max(0, l.extendLeft ?? 0),
+    extendRight: Math.max(0, l.extendRight ?? 0),
+    beyond,
+  };
+}
+
+/**
+ * A landing in the frame of the flight arriving on it: `f` along that flight from its top riser,
+ * `l` to its left. The platform is the rectangle f ∈ [0, depth] × l ∈ [right, left]; the next
+ * flight's first riser is centred on `next` and it climbs towards `nextDir`.
+ */
+export interface LandingFrame {
+  depth: number;
+  /** Lateral edges: right (≤ 0) and left (≥ 0). */
+  right: number;
+  left: number;
+  next: { f: number; l: number };
+  nextDir: { f: number; l: number };
+}
+
+export function landingFrame(l: Required<StairLandingSpec>, wIn: number, wOut: number): LandingFrame {
+  const ext = (side: number) => (side > 0 ? l.extendLeft : l.extendRight);
+  if (l.turn === 'none') {
+    const h = Math.max(wIn, wOut) / 2;
+    return { depth: l.depth, right: -(h + l.extendRight), left: h + l.extendLeft, next: { f: l.depth, l: 0 }, nextDir: { f: 1, l: 0 } };
+  }
+  const s = l.turn === 'left' ? 1 : -1;
+  const edges = (turnSide: number, otherSide: number) => (s > 0 ? { left: turnSide, right: -otherSide } : { left: otherSide, right: -turnSide });
+  if (l.angle === 90) {
+    // As wide as the arriving flight (plus extras); the next flight leaves from the turn-side edge,
+    // its far side `beyond` short of the far edge.
+    const out = wIn / 2 + ext(s);
+    return { depth: l.depth, ...edges(out, wIn / 2 + ext(-s)), next: { f: l.depth - l.beyond - wOut / 2, l: s * out }, nextDir: { f: 0, l: s } };
+  }
+  // Half turn: the next flight comes back alongside, beyond the well.
+  const off = s * (wIn / 2 + l.gap + wOut / 2);
+  return { depth: l.depth, ...edges(Math.abs(off) + wOut / 2 + ext(s), wIn / 2 + ext(-s)), next: { f: 0, l: off }, nextDir: { f: -1, l: 0 } };
 }
 
 /** Explicit runs for a stair (customised copy of its preset), ready to edit. Spirals: null. */
@@ -150,32 +192,13 @@ export function computeStairLayout(stair: Stair, levelHeight: number): StairLayo
 
     const landing = runs.landings[i];
     if (!landing) return;
-    const next = runs.flights[i + 1];
-    const d = landing.depth;
-    let poly: Vec2[];
-    if (landing.turn === 'none') {
-      const half = Math.max(w, next.width) / 2;
-      poly = rect(n * g, n * g + d, -half, half);
-      start = at(n * g + d, 0);
-    } else {
-      const s = landing.turn === 'left' ? 1 : -1;
-      if (landing.angle === 90) {
-        // Landing as wide as the incoming flight; the next flight leaves from its side, flush with the far edge.
-        poly = rect(n * g, n * g + d, -w / 2, w / 2);
-        const turnAt = at(n * g + d - next.width / 2, 0);
-        walk.push(turnAt);
-        start = add(turnAt, scale(side, (s * w) / 2));
-        dir = scale(side, s);
-      } else {
-        // Half turn: the next flight comes back alongside, beyond the well.
-        const off = s * (w / 2 + landing.gap + next.width / 2);
-        const outer = [-s * (w / 2), off + s * (next.width / 2)];
-        poly = rect(n * g, n * g + d, Math.min(...outer), Math.max(...outer));
-        walk.push(at(n * g + d / 2, 0), at(n * g + d / 2, off));
-        start = at(n * g, off);
-        dir = scale(dir, -1);
-      }
-    }
+    const fr = landingFrame(landing, w, runs.flights[i + 1].width);
+    const f0 = n * g;
+    const poly = rect(f0, f0 + fr.depth, fr.right, fr.left);
+    if (landing.turn !== 'none' && landing.angle === 90) walk.push(at(f0 + fr.next.f, 0));
+    else if (landing.turn !== 'none') walk.push(at(f0 + fr.depth / 2, 0), at(f0 + fr.depth / 2, fr.next.l));
+    start = at(f0 + fr.next.f, fr.next.l);
+    dir = add(scale(dir, fr.nextDir.f), scale(side, fr.nextDir.l));
     landings.push({ polygon: poly, top: base });
     footprint.push(poly);
   });
@@ -215,7 +238,7 @@ function spiralLayout(stair: Stair, rise: number): StairLayout {
  */
 export function mirrorStair(stair: Stair, levelHeight: number): Stair {
   const out: Stair = { ...stair, turn: otherSide(stair.turn), ...swappedRails(stair) };
-  if (stair.runs) out.runs = { ...stair.runs, landings: stair.runs.landings.map((l) => ({ ...l, turn: flipTurn(l.turn) })) };
+  if (stair.runs) out.runs = { ...stair.runs, landings: stair.runs.landings.map((l) => ({ ...swapSides(l), turn: flipTurn(l.turn) })) };
   if (stair.shape === 'spiral' && !stair.runs) return out;
   // Reflect across the footprint's centre line along the direction of travel: lateral l → l0 + l1 − l.
   const s = perp(dirFromDeg(stair.rotation));
@@ -247,14 +270,15 @@ export function reverseStair(stair: Stair, levelHeight: number): Stair {
   if (!last) return stair;
   const position = roundPoint(add(last.start, scale(last.direction, last.treadIndices.length * last.going)));
   const rotation = normDeg(angleDeg(scale(last.direction, -1)));
-  if (stair.runs) {
+  if (stair.runs && layout.runs) {
     const n = stair.runs.flights.length;
+    const { flights: rf, landings: rl } = layout.runs;
     const runs: StairRuns = {
       flights: [...stair.runs.flights].reverse(),
       landings: stair.runs.landings
         .slice(0, n - 1)
-        .reverse()
-        .map((l) => ({ ...l, turn: flipTurn(l.turn) })),
+        .map((l, j) => reverseLanding(l, rl[j], rf[j].width, rf[j + 1].width))
+        .reverse(),
     };
     return { ...stair, ...rails, position, rotation, turn: otherSide(stair.turn), runs };
   }
@@ -269,6 +293,36 @@ export function reverseStair(stair: Stair, levelHeight: number): Stair {
     firstFlightTreads: last.treadIndices.length,
     ...(flights.length === 3 ? { secondFlightTreads: flights[1].treadIndices.length } : {}),
   };
+}
+
+/** A landing's left and right extras swapped (only the ones that are set). */
+function swapSides(l: StairLandingSpec): StairLandingSpec {
+  const { extendLeft, extendRight, ...rest } = l;
+  return { ...rest, ...(extendRight !== undefined ? { extendLeft: extendRight } : {}), ...(extendLeft !== undefined ? { extendRight: extendLeft } : {}) };
+}
+
+/**
+ * The same landing walked the other way: `wIn` / `wOut` are the widths of the flights arriving on /
+ * leaving it going up. Straight landings swap sides; half turns keep theirs (the frame faces the
+ * same way); a quarter turn's frame turns 90°, so depth, extras and `beyond` trade places.
+ */
+function reverseLanding(spec: StairLandingSpec, r: Required<StairLandingSpec>, wIn: number, wOut: number): StairLandingSpec {
+  const turn = flipTurn(spec.turn);
+  if (spec.turn === 'none') return { ...swapSides(spec), turn };
+  if (r.angle === 180) return { ...spec, turn };
+  if (spec.depth === undefined && !spec.extendLeft && !spec.extendRight && !spec.beyond) return { ...spec, turn };
+  const s = spec.turn === 'left' ? 1 : -1;
+  const turnSide = s > 0 ? r.extendLeft : r.extendRight;
+  const outer = s > 0 ? r.extendRight : r.extendLeft;
+  // Walking down, the new turn side is the old back edge, the new outer side the old far edge.
+  const newTurnSide = Math.max(0, Math.round((r.depth - r.beyond - wOut) * 1000) / 1000);
+  const { extendLeft: _l, extendRight: _r, beyond: _b, depth: _d, ...rest } = spec;
+  const out: StairLandingSpec = { ...rest, turn, depth: wIn + turnSide + outer };
+  const [left, right] = turn === 'left' ? [newTurnSide, r.beyond] : [r.beyond, newTurnSide];
+  if (left) out.extendLeft = left;
+  if (right) out.extendRight = right;
+  if (outer) out.beyond = outer;
+  return out;
 }
 
 /** Handrail sides after a mirror or reversal (left ↔ right); {} when unchanged. */

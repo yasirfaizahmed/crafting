@@ -2,7 +2,7 @@
  * Edit handles for selected elements and how dragging them changes the model (pure).
  */
 import { add, dirFromDeg, distance, dot, midpoint, normalize, perp, scale, sub } from '../core/math2d';
-import { computeStairLayout, editableRuns } from '../core/stairs';
+import { computeStairLayout, editableRuns, landingFrame } from '../core/stairs';
 import type { Element, Opening, Stair, StairRuns, Vec2 } from '../core/types';
 import { projectOntoWall, wallLength } from '../core/walls';
 import { dragWallEndpoint, type Patch, withVertex } from './edit-ops';
@@ -185,7 +185,11 @@ function rotateHandle(el: Element, ctx: HandleContext): Handle[] {
   return [H(el, 'rotate', add(center, scale(dir, rr.r + ctx.px(26))), 'circle', 0, 'grab')];
 }
 
-/** Stretch handles of a straight-run stair: flight ends, flight sides, landing far edges, U-turn wells. */
+/**
+ * Stretch handles of a straight-run stair: flight ends (steps) and sides (width); every edge of every
+ * landing (far edge = depth, left / right = extra platform), where a quarter landing's next flight
+ * sits along its edge, and U-turn wells.
+ */
 function stairHandles(st: Stair, ctx: HandleContext): Handle[] {
   const layout = computeStairLayout(st, ctx.levelHeight);
   if (!layout.runs || !layout.flights) return [];
@@ -198,7 +202,15 @@ function stairHandles(st: Stair, ctx: HandleContext): Handle[] {
     if (run > ctx.px(24)) out.push(H(st, 'stair-width', add(add(f.start, scale(f.direction, run / 2)), scale(left, f.width / 2)), 'square', i, 'ew-resize'));
     const l = layout.runs!.landings[i];
     if (!l) return;
-    out.push(H(st, 'stair-depth', add(end, scale(f.direction, l.depth)), 'square', i, 'ns-resize'));
+    const fr = landingFrame(l, f.width, layout.runs!.flights[i + 1].width);
+    const at = (fa: number, la: number) => add(end, add(scale(f.direction, fa), scale(left, la)));
+    out.push(H(st, 'stair-depth', at(fr.depth, (fr.left + fr.right) / 2), 'square', i, 'ns-resize'));
+    out.push(H(st, 'stair-left', at(fr.depth / 2, fr.left), 'square', i, 'ew-resize'));
+    out.push(H(st, 'stair-right', at(fr.depth / 2, fr.right), 'square', i, 'ew-resize'));
+    if (l.turn !== 'none' && l.angle === 90) {
+      // Where the next flight's far side meets the landing edge: slide the flight along the landing.
+      out.push(H(st, 'stair-beyond', at(fr.depth - l.beyond, fr.next.l), 'diamond', i, 'move'));
+    }
     if (l.turn !== 'none' && l.angle === 180) {
       const s = l.turn === 'left' ? 1 : -1;
       out.push(H(st, 'stair-gap', add(end, scale(left, s * (f.width / 2 + l.gap))), 'diamond', i, 'ew-resize'));
@@ -242,6 +254,29 @@ export function stretchStair(h: Handle, st: Stair, target: Vec2, levelHeight: nu
       next.landings[i].gap = Math.max(0, r10(s * dot(sub(target, end), left) - f.width / 2));
       break;
     }
+    case 'stair-left':
+    case 'stair-right': {
+      const l = layout.runs?.landings[i];
+      const spec = next.landings[i];
+      if (!l || !spec) return null;
+      // The edge goes where it is dragged; the extra platform is what lies beyond the flights.
+      const fr = landingFrame(l, f.width, layout.runs!.flights[i + 1].width);
+      const side = h.kind === 'stair-left' ? 1 : -1;
+      const key = side > 0 ? 'extendLeft' : 'extendRight';
+      const plain = (side > 0 ? fr.left : -fr.right) - l[key];
+      spec[key] = Math.max(0, r10(side * dot(sub(target, end), left) - plain));
+      break;
+    }
+    case 'stair-beyond': {
+      const l = layout.runs?.landings[i];
+      const spec = next.landings[i];
+      if (!l || !spec || l.turn === 'none' || l.angle !== 90) return null;
+      // Slide the next flight along the landing edge; the platform keeps its size.
+      const wOut = layout.runs!.flights[i + 1].width;
+      spec.depth = l.depth;
+      spec.beyond = Math.min(Math.max(0, r10(l.depth - dot(sub(target, end), f.direction))), Math.max(0, l.depth - wOut));
+      break;
+    }
     default:
       return null;
   }
@@ -273,6 +308,16 @@ export function stairStretchLabel(h: Handle, st: Stair, levelHeight: number, fmt
       return `Landing ${fmt(r?.landings[i]?.depth ?? 0)}`;
     case 'stair-gap':
       return `Well ${fmt(r?.landings[i]?.gap ?? 0)}`;
+    case 'stair-left':
+    case 'stair-right': {
+      const ld = r?.landings[i];
+      if (!ld || !r) return '';
+      const fr = landingFrame(ld, r.flights[i].width, r.flights[i + 1].width);
+      const extra = h.kind === 'stair-left' ? ld.extendLeft : ld.extendRight;
+      return `Landing ${fmt(fr.depth)} × ${fmt(fr.left - fr.right)} · ${extra ? `+${fmt(extra)} ${h.kind === 'stair-left' ? 'left' : 'right'}` : 'flush'}`;
+    }
+    case 'stair-beyond':
+      return `Past next flight ${fmt(r?.landings[i]?.beyond ?? 0)}`;
     default:
       return '';
   }
@@ -338,7 +383,10 @@ export function applyHandle(h: Handle, base: Element, target: Vec2, ctx: { eleme
     case 'stair-end':
     case 'stair-width':
     case 'stair-depth':
-    case 'stair-gap': {
+    case 'stair-gap':
+    case 'stair-left':
+    case 'stair-right':
+    case 'stair-beyond': {
       if (base.type !== 'stair') break;
       const st = stretchStair(h, base, target, ctx.levelHeight ?? 3000);
       if (st) set(st);

@@ -30,7 +30,9 @@ Both views edit the same model, so every change appears in the other view instan
 - **BIM model in millimetres:**
   - levels, walls that join cleanly at L, T and X corners, doors (6 styles) and windows (5 styles) cut
     into walls;
-  - slabs with holes, roofs (gable, hip, shed, pyramid, flat), stairs (straight, L, U, spiral);
+  - slabs with holes, roofs (gable, hip, shed, pyramid, flat), stairs (straight, L, U, open-well,
+    spiral) where every flight's steps, going and width and every landing edge can be stretched in
+    the plan (landings grow on any side, and quarter landings can slide the next flight along);
   - columns, beams, railings, rooms with areas, free-form blocks, dimensions and labels.
 - **Interior design:**
   - 50 parametric furniture and fixture models across living, dining, bedroom, kitchen, bath, office,

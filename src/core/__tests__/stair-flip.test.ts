@@ -153,3 +153,105 @@ describe('open-well stair (three flights, two corner landings)', () => {
     expect(computeStairLayout(ow({ rise: 600 }), H).flights?.length ?? 0).toBeLessThan(3);
   });
 });
+
+describe('landing extensions (stretching a platform on any side)', () => {
+  const custom = (runs: Stair['runs'], props: Partial<Stair> = {}) => stair('straight', { rotation: 0, position: { x: 0, y: 0 }, width: 1000, tread: 280, runs, ...props });
+  const landing = (s: Stair, i = 0) => boundsOf(computeStairLayout(s, H).landings[i].polygon);
+  const flightStart = (s: Stair, i: number) => computeStairLayout(s, H).flights![i].start;
+
+  it('quarter turn: the outer side and the far edge past the next flight grow only the platform', () => {
+    // Up +x, turn left (+y). Landing: x ∈ [1960, 2960], y ∈ [−500, 500].
+    const base = custom({ flights: [{ treads: 7 }, { treads: 8 }], landings: [{ turn: 'left', angle: 90 }] });
+    const b0 = landing(base);
+    const outer = custom({ ...base.runs!, landings: [{ turn: 'left', angle: 90, extendRight: 400 }] });
+    expect(landing(outer).minY).toBeCloseTo(b0.minY - 400, 6);
+    expect(landing(outer).maxY).toBeCloseTo(b0.maxY, 6);
+    expect(key(flightStart(outer, 1))).toBe(key(flightStart(base, 1)));
+    const past = custom({ ...base.runs!, landings: [{ turn: 'left', angle: 90, beyond: 300 }] });
+    expect(landing(past).maxX).toBeCloseTo(b0.maxX + 300, 6);
+    expect(key(flightStart(past, 1))).toBe(key(flightStart(base, 1)));
+  });
+
+  it('quarter turn: stretching the side the next flight leaves from moves that flight out', () => {
+    const base = custom({ flights: [{ treads: 7 }, { treads: 8 }], landings: [{ turn: 'left', angle: 90 }] });
+    const run = custom({ ...base.runs!, landings: [{ turn: 'left', angle: 90, extendLeft: 500 }] });
+    expect(landing(run).maxY).toBeCloseTo(landing(base).maxY + 500, 6);
+    expect(flightStart(run, 1).y).toBeCloseTo(flightStart(base, 1).y + 500, 6);
+    expect(flightStart(run, 1).x).toBeCloseTo(flightStart(base, 1).x, 6);
+  });
+
+  it('straight and half-turn landings widen on either side without moving any flight', () => {
+    const straight = { flights: [{ treads: 7 }, { treads: 8 }], landings: [{ turn: 'none' as const }] };
+    const s = custom({ ...straight, landings: [{ turn: 'none', extendLeft: 300, extendRight: 200 }] });
+    expect(landing(s).maxY).toBeCloseTo(800, 6);
+    expect(landing(s).minY).toBeCloseTo(-700, 6);
+    expect(key(flightStart(s, 1))).toBe(key(flightStart(custom(straight), 1)));
+    const half = { flights: [{ treads: 7 }, { treads: 8 }], landings: [{ turn: 'right' as const, angle: 180 as const }] };
+    const u = custom({ ...half, landings: [{ turn: 'right', angle: 180, extendLeft: 250, extendRight: 350 }] });
+    const plain = landing(custom(half));
+    expect(landing(u).maxY).toBeCloseTo(plain.maxY + 250, 6);
+    expect(landing(u).minY).toBeCloseTo(plain.minY - 350, 6);
+    expect(key(flightStart(u, 1))).toBe(key(flightStart(custom(half), 1)));
+  });
+
+  const cases: [string, Stair['runs']][] = [
+    ['quarter, all extras', { flights: [{ treads: 6 }, { treads: 5, width: 900 }], landings: [{ turn: 'left', angle: 90, extendLeft: 300, extendRight: 450, beyond: 200, depth: 1400 }] }],
+    ['quarter right, outer only', { flights: [{ treads: 6, width: 1100 }, { treads: 5 }], landings: [{ turn: 'right', angle: 90, extendLeft: 350 }] }],
+    ['straight', { flights: [{ treads: 6 }, { treads: 5 }], landings: [{ turn: 'none', extendLeft: 120, depth: 1300 }] }],
+    ['half turn', { flights: [{ treads: 6 }, { treads: 5, width: 800 }], landings: [{ turn: 'left', angle: 180, gap: 250, extendRight: 300, extendLeft: 150, depth: 1500 }] }],
+    [
+      'open well with deep, wide landings',
+      {
+        flights: [{ treads: 5 }, { treads: 4 }, { treads: 5 }],
+        landings: [
+          { turn: 'right', angle: 90, extendLeft: 400, depth: 1300 },
+          { turn: 'right', angle: 90, extendRight: 250, beyond: 150 },
+        ],
+      },
+    ],
+  ];
+  for (const [name, runs] of cases) {
+    it(`${name}: reversing and mirroring keep every platform in place`, () => {
+      const s = custom(runs, { rotation: 25, position: { x: 1500, y: -700 } });
+      const r = reverseStair(s, H);
+      expectSamePlaces(r, s);
+      expectSameBox(r, s);
+      const rl = computeStairLayout(r, H).landings.map((l) => Math.round(Math.abs(boundsArea(l.polygon)))).sort();
+      expect(rl).toEqual(computeStairLayout(s, H).landings.map((l) => Math.round(Math.abs(boundsArea(l.polygon)))).sort());
+      expectSamePlaces(reverseStair(r, H), s);
+      const m = mirrorStair(s, H);
+      expectSameBox(m, s);
+      expectSamePlaces(mirrorStair(m, H), s);
+    });
+  }
+});
+
+/** Tread and landing centroids of `a` and `b` coincide (within 0.5 mm, in any order). */
+function expectSamePlaces(a: Stair, b: Stair): void {
+  const pts = (s: Stair) => {
+    const l = computeStairLayout(s, H);
+    return [...l.treads, ...l.landings].map((t) => centroid(t.polygon));
+  };
+  const pa = pts(a);
+  const pb = pts(b);
+  expect(pa).toHaveLength(pb.length);
+  for (const p of pa) expect(pb.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 0.5)).toBe(true);
+}
+
+/** Footprint extents of `a` equal those of `b` in `b`'s frame (within 0.5 mm). */
+function expectSameBox(a: Stair, b: Stair): void {
+  const f = dirFromDeg(b.rotation);
+  const n = perp(f);
+  const box = (s: Stair) => {
+    const r = boundsOf(computeStairLayout(s, H).footprint.flat().map((p) => ({ x: dot(p, f), y: dot(p, n) })));
+    return [r.minX, r.minY, r.maxX, r.maxY];
+  };
+  box(a).forEach((v, i) => expect(v).toBeCloseTo(box(b)[i], 0));
+}
+
+/** Shoelace area of a polygon. */
+function boundsArea(poly: Vec2[]): number {
+  let a = 0;
+  for (let i = 0; i < poly.length; i++) a += poly[i].x * poly[(i + 1) % poly.length].y - poly[(i + 1) % poly.length].x * poly[i].y;
+  return a / 2;
+}

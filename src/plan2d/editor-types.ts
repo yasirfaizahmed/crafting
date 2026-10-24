@@ -39,10 +39,17 @@ export interface Handle {
     | 'offset'
     | 'opening-a'
     | 'opening-b'
-    /** Stairs: drag a flight's top end (steps), its side (width), a landing's far edge (depth) or a U-turn well (gap). */
+    /**
+     * Stairs: drag a flight's top end (steps) or side (width); a landing's far edge (depth), left /
+     * right edge (extra platform), the point a quarter landing's next flight leaves from (slide it
+     * along the edge), or a U-turn well (gap).
+     */
     | 'stair-end'
     | 'stair-width'
     | 'stair-depth'
+    | 'stair-left'
+    | 'stair-right'
+    | 'stair-beyond'
     | 'stair-gap'
     /** Furniture, columns and blocks: drag an edge (index 0..3 = +x, −x, +y, −y in the element's frame); the opposite edge stays. */
     | 'size';

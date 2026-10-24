@@ -211,6 +211,15 @@ export interface StairLandingSpec {
   depth?: number;
   /** Half turns: the open well between the two flights, mm. Undefined = 100. */
   gap?: number;
+  /**
+   * Extra landing beyond the flights on the left / right (looking up the arriving flight), mm.
+   * Undefined = 0. On the side a quarter turn leaves from, it is the walk before the next flight
+   * starts (the next flight moves out with that edge); every other side just grows the platform.
+   */
+  extendLeft?: number;
+  extendRight?: number;
+  /** Quarter turns: landing continuing past the far side of the next flight, mm. Undefined = 0. */
+  beyond?: number;
 }
 
 /** Flights and landings in walking order: landings[i] sits between flights[i] and flights[i + 1]. */
